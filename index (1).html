@@ -1,0 +1,3037 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<!-- Playables SDK -->
+<script>// Playables SDK v1.0.0
+// Game lifecycle bridge: rAF-based game-ready detection + event communication
+(function() {
+  'use strict';
+
+  var HANDLER_NAME = 'playablesGameEventHandler';
+  var ANDROID_BRIDGE_NAME = '_MetaPlayablesBridge';
+  var RAF_FRAME_THRESHOLD = 3;
+
+  var gameReadySent = false;
+  var firstInteractionSent = false;
+  var errorSent = false;
+  var frameCount = 0;
+  var originalRAF = window.requestAnimationFrame;
+
+  // --- Transport Layer ---
+
+  function hasIOSBridge() {
+    return !!(window.webkit &&
+              window.webkit.messageHandlers &&
+              window.webkit.messageHandlers[HANDLER_NAME]);
+  }
+
+  function hasAndroidBridge() {
+    return !!(window[ANDROID_BRIDGE_NAME] &&
+              typeof window[ANDROID_BRIDGE_NAME].postEvent === 'function');
+  }
+
+  function isInIframe() {
+    return !!(window.parent && window.parent !== window);
+  }
+
+  function sendEvent(eventName, payload) {
+    var message = {
+      type: eventName,
+      payload: payload || {},
+      timestamp: Date.now()
+    };
+
+    if (hasIOSBridge()) {
+      try {
+        window.webkit.messageHandlers[HANDLER_NAME].postMessage(message);
+      } catch (e) { /* ignore */ }
+      return;
+    }
+
+    if (hasAndroidBridge()) {
+    try {
+      var p = payload || {};
+      p.__secureToken = window.__fbAndroidBridgeAuthToken || '';
+      window[ANDROID_BRIDGE_NAME].postEvent(
+        eventName,
+        JSON.stringify(p)
+      );
+    } catch (e) { /* ignore */ }
+    return;
+  }
+
+    if (isInIframe()) {
+      try {
+        window.parent.postMessage(message, '*');
+      } catch (e) { /* ignore */ }
+      return;
+    }
+  }
+
+  // --- rAF Game-Ready Detection ---
+
+  function onFrame() {
+    if (gameReadySent) return;
+
+    frameCount++;
+    if (frameCount >= RAF_FRAME_THRESHOLD) {
+      gameReadySent = true;
+      sendEvent('game_ready', {
+        frame_count: frameCount,
+        detected_at: Date.now()
+      });
+      return;
+    }
+
+    originalRAF.call(window, onFrame);
+  }
+
+  if (originalRAF) {
+    window.requestAnimationFrame = function(callback) {
+      if (!gameReadySent) {
+        return originalRAF.call(window, function(timestamp) {
+          frameCount++;
+          if (frameCount >= RAF_FRAME_THRESHOLD && !gameReadySent) {
+            gameReadySent = true;
+            sendEvent('game_ready', {
+              frame_count: frameCount,
+              detected_at: Date.now()
+            });
+          }
+          callback(timestamp);
+        });
+      }
+      return originalRAF.call(window, callback);
+    };
+  }
+
+  // --- First User Interaction Detection ---
+
+  function setupFirstInteractionDetection() {
+    var events = ['touchstart', 'mousedown', 'keydown'];
+
+    function onFirstInteraction() {
+      if (firstInteractionSent) return;
+      firstInteractionSent = true;
+      sendEvent('user_interaction_start', null);
+
+      for (var i = 0; i < events.length; i++) {
+        document.removeEventListener(events[i], onFirstInteraction, true);
+      }
+    }
+
+    for (var i = 0; i < events.length; i++) {
+      document.addEventListener(events[i], onFirstInteraction, true);
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setupFirstInteractionDetection);
+  } else {
+    setupFirstInteractionDetection();
+  }
+
+  // --- Auto Error Capture ---
+
+  window.addEventListener('error', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    sendEvent('error', {
+      message: event.message || 'Unknown error',
+      source: event.filename || '',
+      lineno: event.lineno || 0,
+      colno: event.colno || 0,
+      auto_captured: true
+    });
+  });
+
+  window.addEventListener('unhandledrejection', function(event) {
+    if (errorSent) return;
+    errorSent = true;
+    var reason = event.reason;
+    sendEvent('error', {
+      message: (reason instanceof Error) ? reason.message : String(reason),
+      type: 'unhandled_promise_rejection',
+      auto_captured: true
+    });
+  });
+
+  // --- Public API ---
+
+  window.playablesSDK = {
+    complete: function(score) {
+      sendEvent('game_ended', {
+        score: score,
+        completed: true
+      });
+    },
+
+    error: function(message) {
+      if (errorSent) return;
+      errorSent = true;
+      sendEvent('error', {
+        message: message || 'Unknown error',
+        auto_captured: false
+      });
+    },
+
+    sendEvent: function(eventName, payload) {
+      if (!eventName || typeof eventName !== 'string') return;
+      sendEvent(eventName, payload);
+    }
+  };
+
+  // Kick off rAF detection in case no game code calls rAF immediately
+  if (originalRAF) {
+    originalRAF.call(window, onFrame);
+  }
+})();</script>
+<script>window.Intl=window.Intl||{};Intl.t=function(s){return(Intl._locale&&Intl._locale[s])||s;};</script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Breakthesystem - Plataforma Profissional</title>
+<link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+<style>
+:root {
+  --primary: #3b82f6; --primary-hover: #2563eb; --primary-glow: rgba(59,130,246,0.5);
+  --secondary: #0ea5e9; --secondary-glow: rgba(14,165,233,0.5);
+  --accent: #8b5cf6; --bg-base: #030712; --glass-bg: rgba(17,24,39,0.7);
+  --glass-border: 1px solid rgba(255,255,255,0.08); --glass-highlight: rgba(255,255,255,0.05);
+  --text-main: #f8fafc; --text-muted: #94a3b8; --text-dark: #cbd5e1;
+  --success: #10b981; --danger: #ef4444; --warning: #f59e0b; --info: #3b82f6;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.5); --shadow-md: 0 4px 6px rgba(0,0,0,0.4),0 2px 4px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.5),0 4px 6px rgba(0,0,0,0.3); --shadow-glow: 0 0 20px var(--primary-glow);
+  --radius-sm: 0.5rem; --radius-md: 0.75rem; --radius-lg: 1.25rem; --radius-full: 9999px;
+  --transition-fast: 0.15s ease-in-out; --transition-normal: 0.3s cubic-bezier(0.4,0,0.2,1); --transition-slow: 0.5s cubic-bezier(0.4,0,0.2,1);
+}
+
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;scroll-behavior:smooth;}
+body{background-color:var(--bg-base);color:var(--text-main);display:flex;height:100vh;overflow:hidden;position:relative;-webkit-font-smoothing:antialiased;}
+h1,h2,h3,h4,h5,h6{color:var(--text-main);font-weight:600;line-height:1.2;}
+p{color:var(--text-muted);line-height:1.6;}
+a{color:var(--primary);text-decoration:none;transition:var(--transition-normal);}
+a:hover{color:var(--secondary);}
+
+#bg-canvas{position:absolute;top:0;left:0;width:100vw;height:100vh;z-index:0;pointer-events:none;}
+#app-container{display:flex;width:100%;height:100%;z-index:1;position:relative;}
+
+.glass-panel{background:var(--glass-bg);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:var(--glass-border);box-shadow:var(--shadow-md);}
+.notification-dot{position:absolute;top:5px;right:5px;width:12px;height:12px;background-color:var(--danger);border-radius:50%;border:2px solid var(--bg-base);box-shadow:0 0 8px var(--danger);display:none;z-index:5;}
+.nav-item .notification-dot{right:15px;top:50%;transform:translateY(-50%);}
+
+.btn{padding:0.875rem 1.5rem;border-radius:var(--radius-md);border:1px solid transparent;cursor:pointer;font-weight:600;font-size:0.95rem;transition:var(--transition-normal);display:inline-flex;align-items:center;justify-content:center;gap:0.5rem;text-transform:uppercase;letter-spacing:0.5px;}
+.btn:active{transform:scale(0.98);}
+.btn-primary{background:linear-gradient(135deg,var(--primary),var(--secondary));color:white;box-shadow:var(--shadow-glow);}
+.btn-primary:hover{background:linear-gradient(135deg,var(--primary-hover),var(--primary));box-shadow:0 0 25px rgba(59,130,246,0.7);transform:translateY(-2px);}
+.btn-secondary{background:var(--glass-highlight);color:var(--text-main);border:var(--glass-border);}
+.btn-secondary:hover{background:rgba(255,255,255,0.1);}
+.btn-outline{background:transparent;border-color:var(--primary);color:var(--primary);}
+.btn-outline:hover{background:rgba(59,130,246,0.1);box-shadow:0 0 15px rgba(59,130,246,0.2);}
+.btn-info{background:rgba(59,130,246,0.1);color:var(--info);border-color:rgba(59,130,246,0.3);}
+.btn-info:hover{background:var(--info);color:white;box-shadow:0 0 15px rgba(59,130,246,0.4);}
+.btn-success{background:rgba(16,185,129,0.1);color:var(--success);border-color:rgba(16,185,129,0.3);}
+.btn-success:hover{background:var(--success);color:white;box-shadow:0 0 15px rgba(16,185,129,0.4);}
+.btn-danger{background:rgba(239,68,68,0.1);color:var(--danger);border-color:rgba(239,68,68,0.3);}
+.btn-danger:hover{background:var(--danger);color:white;box-shadow:0 0 15px rgba(239,68,68,0.4);}
+
+.form-group{margin-bottom:1.5rem;position:relative;}
+.form-label{display:block;margin-bottom:0.5rem;font-weight:500;color:var(--text-dark);font-size:0.9rem;}
+.form-control{width:100%;padding:1rem 1.2rem;background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:var(--radius-md);color:var(--text-main);font-size:1rem;transition:var(--transition-normal);}
+.form-control:focus{outline:none;border-color:var(--primary);background:rgba(0,0,0,0.6);box-shadow:inset 0 0 0 1px var(--primary),0 0 15px rgba(59,130,246,0.15);}
+.form-control::placeholder{color:rgba(255,255,255,0.3);}
+.form-control[type="file"]{padding:0.8rem;cursor:pointer;color:var(--text-muted);}
+.card{border-radius:var(--radius-lg);padding:2rem;transition:var(--transition-normal);position:relative;overflow:hidden;}
+.badge{padding:0.3rem 0.8rem;border-radius:var(--radius-full);font-size:0.75rem;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;}
+
+/* SIDEBAR */
+#sidebar{width:280px;display:flex;flex-direction:column;border-right:var(--glass-border);background:rgba(15,23,42,0.95);z-index:1000;transition:transform 0.3s ease;}
+.sidebar-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);backdrop-filter:blur(4px);z-index:999;opacity:0;transition:opacity 0.3s ease;}
+.hamburger-btn{display:none;background:transparent;border:none;color:var(--text-main);font-size:1.5rem;cursor:pointer;padding:0.5rem;margin-right:1rem;transition:var(--transition-fast);}
+.hamburger-btn:hover{color:var(--primary);}
+.sidebar-close-btn{display:none;position:absolute;top:1.5rem;right:1.5rem;background:transparent;border:none;color:var(--text-muted);font-size:1.5rem;cursor:pointer;}
+.sidebar-close-btn:hover{color:var(--danger);}
+
+@media(max-width:900px){
+  #sidebar{position:fixed;top:0;left:0;height:100vh;transform:translateX(-100%);box-shadow:var(--shadow-lg);}
+  #sidebar.open{transform:translateX(0);}
+  .sidebar-overlay.active{display:block;opacity:1;}
+  .hamburger-btn{display:block;}
+  .sidebar-close-btn{display:block;}
+}
+
+.sidebar-header{padding:2.5rem 2rem;text-align:center;border-bottom:var(--glass-border);position:relative;}
+.sidebar-header h2{font-size:1.8rem;letter-spacing:1px;font-weight:800;}
+.sidebar-header span{color:var(--primary);text-shadow:0 0 15px rgba(59,130,246,0.6);}
+.nav-menu{padding:2rem 0;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:0.5rem;}
+.nav-item{padding:1rem 2rem;display:flex;align-items:center;gap:1rem;color:var(--text-muted);cursor:pointer;transition:var(--transition-normal);border-left:4px solid transparent;font-weight:500;position:relative;}
+.nav-item i{font-size:1.2rem;width:24px;text-align:center;transition:var(--transition-fast);}
+.nav-item:hover{color:var(--text-main);background:rgba(255,255,255,0.03);}
+.nav-item.active{background:linear-gradient(90deg,rgba(59,130,246,0.15) 0%,transparent 100%);color:var(--text-main);border-left-color:var(--primary);}
+.nav-item.active i{color:var(--primary);transform:scale(1.1);text-shadow:0 0 10px var(--primary-glow);}
+
+/* MAIN */
+#main-content{flex:1;display:flex;flex-direction:column;overflow-y:auto;position:relative;scroll-behavior:smooth;}
+#topbar{padding:1.5rem 3rem;display:flex;justify-content:space-between;align-items:center;border-bottom:var(--glass-border);position:sticky;top:0;backdrop-filter:blur(20px);z-index:20;flex-wrap:wrap;gap:1rem;}
+@media(max-width:900px){#topbar{padding:1rem 1.5rem;}}
+
+.user-info{display:flex;align-items:center;gap:1rem;cursor:pointer;padding:0.5rem;border-radius:var(--radius-md);transition:var(--transition-normal);}
+.user-info:hover{background:rgba(255,255,255,0.05);}
+.avatar{width:48px;height:48px;border-radius:var(--radius-full);background:var(--glass-highlight);color:var(--text-main);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:1.2rem;border:2px solid rgba(255,255,255,0.1);background-size:cover;background-position:center;transition:var(--transition-normal);position:relative;flex-shrink:0;}
+.avatar.online::after{content:'';position:absolute;bottom:0;right:0;width:12px;height:12px;background:var(--success);border-radius:50%;border:2px solid var(--bg-base);}
+
+/* VIEWS */
+.view-section{padding:2.5rem;display:none;opacity:0;transform:translateY(15px);animation:viewFadeIn 0.4s cubic-bezier(0.4,0,0.2,1) forwards;max-width:1600px;margin:0 auto;width:100%;}
+.view-section.active{display:block;}
+@media(max-width:900px){.view-section{padding:1.5rem;}}
+@keyframes viewFadeIn{to{opacity:1;transform:translateY(0);}}
+
+.grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;}
+.grid-4{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:1.2rem;}
+.grid-5{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:1.2rem;}
+
+/* DASHBOARD */
+.stat-card{display:flex;align-items:center;gap:1.5rem;padding:2rem;}
+.stat-icon{width:70px;height:70px;border-radius:var(--radius-lg);display:flex;align-items:center;justify-content:center;font-size:2rem;background:rgba(59,130,246,0.1);color:var(--primary);border:1px solid rgba(59,130,246,0.2);box-shadow:inset 0 0 20px rgba(59,130,246,0.1);}
+.stat-info h4{color:var(--text-muted);font-size:0.85rem;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:0.5rem;}
+.stat-info h2{font-size:2.2rem;font-weight:700;color:white;display:flex;align-items:center;gap:0.5rem;}
+.chart-container{width:100%;height:300px;margin-top:1rem;}
+table{width:100%;border-collapse:collapse;text-align:left;font-size:0.95rem;}
+th{padding:1.2rem;border-bottom:2px solid rgba(255,255,255,0.05);color:var(--text-dark);font-weight:600;text-transform:uppercase;font-size:0.8rem;letter-spacing:1px;}
+td{padding:1.2rem;border-bottom:1px solid rgba(255,255,255,0.03);color:var(--text-muted);vertical-align:middle;}
+tr:hover td{background:rgba(255,255,255,0.02);color:var(--text-main);}
+
+/* MARKETPLACE */
+.product-card{padding:0!important;display:flex;flex-direction:column;background:#0f172a;border:1px solid rgba(255,255,255,0.08);border-radius:12px;overflow:hidden;transition:all 0.3s ease;height:100%;}
+.product-card:hover{transform:translateY(-6px);border-color:var(--primary);box-shadow:0 12px 24px rgba(0,0,0,0.5);}
+.product-img{width:100%;aspect-ratio:4/3;background-color:#1e293b;background-size:cover;background-position:center;position:relative;}
+.product-badge{position:absolute;top:10px;right:10px;background:rgba(0,0,0,0.7);backdrop-filter:blur(4px);padding:4px 10px;border-radius:6px;font-size:0.65rem;color:var(--secondary);font-weight:700;text-transform:uppercase;z-index:2;}
+.product-content{padding:1.2rem;flex:1;display:flex;flex-direction:column;}
+.product-seller{display:flex;align-items:center;gap:8px;margin-bottom:8px;cursor:pointer;transition:0.2s;}
+.product-seller:hover span{color:var(--primary);}
+.seller-avatar{width:20px;height:20px;border-radius:50%;border:1px solid rgba(255,255,255,0.2);background-size:cover;background-position:center;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:bold;}
+.product-seller span{font-size:0.75rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.product-title{font-size:0.95rem;margin-bottom:8px;line-height:1.4;font-weight:600;color:#fff;height:2.8em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.product-desc{font-size:0.85rem;color:var(--text-muted);line-height:1.45;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;flex-grow:1;}
+.product-footer{margin-top:auto;padding-top:12px;border-top:1px solid rgba(255,255,255,0.05);display:flex;flex-direction:column;gap:10px;}
+.product-price{font-size:1.4rem;color:#fff;font-weight:800;display:flex;align-items:baseline;gap:4px;}
+.product-price span{font-size:0.85rem;color:var(--success);font-weight:600;}
+
+/* PROFILE */
+.profile-cover{height:260px;border-radius:20px;background:linear-gradient(to bottom,rgba(3,7,18,0.3),rgba(3,7,18,0.95)),url('https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=1200&q=80') center/cover;position:relative;border:1px solid rgba(255,255,255,0.1);box-shadow:0 8px 30px rgba(0,0,0,0.4);}
+.profile-avatar-large{width:160px;height:160px;border-radius:50%;border:5px solid var(--bg-base);position:absolute;top:-80px;left:40px;background-size:cover;background-position:center;background-color:var(--primary);box-shadow:0 10px 30px rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;font-size:4rem;z-index:5;flex-shrink:0;}
+.profile-info-container{position:relative;padding-top:100px;padding-left:40px;padding-right:40px;display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:20px;}
+.profile-main-text{flex:1;margin-left:170px;min-width:250px;}
+@media(max-width:768px){
+  .profile-main-text{margin-left:0;}
+  .profile-avatar-large{position:relative;top:0;left:0;margin-bottom:1rem;}
+  .profile-info-container{padding-left:1rem;padding-right:1rem;flex-direction:column;}
+}
+.profile-main-text h1{font-size:2.4rem;font-weight:700;letter-spacing:-1px;margin-bottom:8px;background:linear-gradient(120deg,var(--text-main) 60%,var(--secondary));-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 2px 15px var(--primary-glow));}
+.profile-main-text p{max-width:500px;font-size:1rem;color:var(--text-muted);}
+.profile-stats-bar{display:flex;gap:30px;background:rgba(17,24,39,0.8);backdrop-filter:blur(10px);padding:1.5rem 2.5rem;border-radius:15px;border:1px solid rgba(255,255,255,0.08);box-shadow:var(--shadow-md);flex-wrap:wrap;}
+.stat-item{text-align:center;cursor:pointer;transition:0.2s;}
+.stat-item:hover{transform:scale(1.05);}
+.stat-item span{display:block;font-size:1.8rem;font-weight:800;color:#fff;}
+.stat-item small{text-transform:uppercase;font-size:0.7rem;letter-spacing:1px;color:var(--primary);font-weight:700;}
+.private-profile-notice{background:rgba(0,0,0,0.4);border:1px solid rgba(255,255,255,0.1);border-radius:15px;padding:4rem 2rem;text-align:center;margin-top:2rem;}
+.private-profile-notice i{font-size:4rem;color:var(--text-muted);margin-bottom:1rem;}
+
+/* RANKING */
+/* ===== PAYMENT MODAL ===== */
+.payment-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);z-index:4000;display:flex;align-items:center;justify-content:center;opacity:0;visibility:hidden;transition:.3s;}
+.payment-overlay.active{opacity:1;visibility:visible;}
+.payment-modal{background:linear-gradient(145deg,#0f172a,#0c1526);border:1px solid rgba(255,255,255,0.1);border-radius:20px;width:92%;max-width:480px;max-height:90vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,0.8);}
+.payment-header{padding:1.8rem 2rem 1.2rem;border-bottom:1px solid rgba(255,255,255,0.07);}
+.payment-body{padding:1.5rem 2rem 2rem;}
+.payment-method{display:flex;align-items:center;gap:1rem;padding:1rem 1.2rem;border:1.5px solid rgba(255,255,255,0.08);border-radius:12px;cursor:pointer;transition:.25s;margin-bottom:.7rem;background:rgba(255,255,255,0.02);}
+.payment-method:hover,.payment-method.selected{border-color:var(--primary);background:rgba(59,130,246,0.1);transform:translateX(4px);}
+.payment-method .pm-icon{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0;}
+.payment-method .pm-info strong{display:block;font-size:.95rem;color:#fff;}
+.payment-method .pm-info small{color:var(--text-muted);font-size:.8rem;}
+.payment-method .pm-check{margin-left:auto;color:var(--primary);font-size:1.1rem;display:none;}
+.payment-method.selected .pm-check{display:block;}
+.pm-form-area{margin-top:1.2rem;padding:1.2rem;background:rgba(0,0,0,0.3);border-radius:12px;border:1px solid rgba(255,255,255,0.06);}
+
+/* ===== PRODUCT DETAIL MODAL ===== */
+.prod-detail-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.92);backdrop-filter:blur(10px);z-index:3500;display:flex;align-items:flex-start;justify-content:center;opacity:0;visibility:hidden;transition:.3s;overflow-y:auto;padding:2rem 1rem;}
+.prod-detail-overlay.active{opacity:1;visibility:visible;}
+.prod-detail-modal{background:linear-gradient(145deg,#0f172a,#0c1526);border:1px solid rgba(255,255,255,0.1);border-radius:20px;width:100%;max-width:820px;box-shadow:0 30px 60px rgba(0,0,0,0.8);position:relative;margin:auto;}
+.prod-detail-close{position:absolute;top:1.2rem;right:1.2rem;background:rgba(255,255,255,0.08);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;z-index:2;transition:.2s;}
+.prod-detail-close:hover{background:var(--danger);}
+
+/* ===== IMAGE CAROUSEL ===== */
+.img-carousel{position:relative;width:100%;aspect-ratio:16/9;background:#0c1526;border-radius:16px 16px 0 0;overflow:hidden;}
+.carousel-track{display:flex;height:100%;transition:transform .4s cubic-bezier(.4,0,.2,1);}
+.carousel-slide{min-width:100%;height:100%;background-size:cover;background-position:center;flex-shrink:0;}
+.carousel-btn{position:absolute;top:50%;transform:translateY(-50%);background:rgba(0,0,0,0.55);border:none;color:#fff;width:38px;height:38px;border-radius:50%;cursor:pointer;font-size:.9rem;z-index:3;display:flex;align-items:center;justify-content:center;transition:.2s;}
+.carousel-btn:hover{background:var(--primary);}
+.carousel-btn.prev{left:10px;}
+.carousel-btn.next{right:10px;}
+.carousel-dots{position:absolute;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:6px;z-index:3;}
+.carousel-dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,0.35);border:none;cursor:pointer;transition:.2s;padding:0;}
+.carousel-dot.active{background:#fff;width:20px;border-radius:4px;}
+
+/* Product card mini-carousel */
+.product-img-wrap{position:relative;overflow:hidden;}
+.product-img-wrap .carousel-btn{width:28px;height:28px;font-size:.7rem;}
+.product-img-wrap .carousel-dots{bottom:6px;}
+.product-img-wrap .carousel-dot{width:5px;height:5px;}
+.product-img-wrap .carousel-dot.active{width:12px;}
+
+/* ===== STAR RATING ===== */
+.star-rating{display:flex;gap:3px;align-items:center;}
+.star-rating .star{font-size:1.1rem;color:#374151;cursor:pointer;transition:.15s;line-height:1;}
+.star-rating .star.active,.star-rating .star.hover{color:#FBBF24;}
+.star-display{display:inline-flex;gap:2px;align-items:center;}
+.star-display .star{font-size:.85rem;color:#FBBF24;}
+.star-display .star.empty{color:#374151;}
+.rating-count{font-size:.75rem;color:var(--text-muted);margin-left:4px;}
+
+/* ===== COMMENTS ===== */
+.comments-section{padding:1.5rem 2rem;border-top:1px solid rgba(255,255,255,0.07);}
+.comment-item{display:flex;gap:.8rem;padding:.9rem 0;border-bottom:1px solid rgba(255,255,255,0.05);}
+.comment-item:last-child{border-bottom:none;}
+.comment-body{flex:1;}
+.comment-body strong{font-size:.9rem;color:#fff;margin-right:8px;}
+.comment-body .comment-text{color:var(--text-muted);font-size:.88rem;margin-top:3px;line-height:1.5;}
+.comment-body .comment-time{font-size:.72rem;color:rgba(255,255,255,0.25);margin-top:4px;}
+.comment-form{padding:1.2rem;background:rgba(0,0,0,0.3);border-radius:12px;border:1px solid rgba(255,255,255,0.06);margin-top:1rem;}
+.comment-input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.09);border-radius:10px;color:#fff;padding:.8rem 1rem;font-size:.9rem;resize:none;outline:none;transition:.2s;font-family:inherit;}
+.comment-input:focus{border-color:var(--primary);background:rgba(0,0,0,0.4);}
+
+/* ===== MULTIPLE IMAGE UPLOAD ===== */
+.multi-img-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:.6rem;margin-top:.8rem;}
+.multi-img-thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;border:1px solid rgba(255,255,255,0.1);}
+.multi-img-thumb img{width:100%;height:100%;object-fit:cover;}
+.multi-img-thumb .remove-img{position:absolute;top:4px;right:4px;background:rgba(239,68,68,.85);border:none;color:#fff;width:20px;height:20px;border-radius:50%;cursor:pointer;font-size:.6rem;display:flex;align-items:center;justify-content:center;}
+.add-more-img{aspect-ratio:1;border:2px dashed rgba(255,255,255,0.15);border-radius:10px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;color:var(--text-muted);font-size:.75rem;gap:4px;transition:.2s;}
+.add-more-img:hover{border-color:var(--primary);color:var(--primary);}
+
+/* ===== DELETE BTN ===== */
+.btn-delete-prod{position:absolute;top:10px;left:10px;background:rgba(239,68,68,.85);border:none;color:#fff;width:32px;height:32px;border-radius:50%;cursor:pointer;font-size:.75rem;display:flex;align-items:center;justify-content:center;z-index:3;transition:.2s;opacity:0;}
+.product-card:hover .btn-delete-prod{opacity:1;}
+.btn-delete-prod:hover{background:var(--danger);transform:scale(1.1);}
+
+.ranking-container{max-height:600px;overflow-y:auto;padding-right:10px;}
+.ranking-item{display:flex;align-items:center;padding:1.2rem 2rem;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);margin-bottom:0.8rem;border-radius:12px;transition:0.3s;cursor:pointer;flex-wrap:wrap;gap:1rem;}
+.ranking-item:hover{transform:translateX(10px);background:rgba(59,130,246,0.1);border-color:var(--primary);}
+.ranking-pos{width:50px;font-size:1.5rem;font-weight:900;color:var(--text-muted);}
+.ranking-pos.gold{color:#FFD700;}
+.ranking-pos.silver{color:#C0C0C0;}
+.ranking-pos.bronze{color:#CD7F32;}
+.ranking-user-info{flex:1;display:flex;align-items:center;gap:15px;}
+.ranking-profit{text-align:right;}
+.ranking-profit h2{color:var(--success);font-size:1.5rem;}
+
+/* FOLLOW MODAL */
+.followers-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;z-index:3000;opacity:0;visibility:hidden;transition:0.3s;}
+.followers-modal-overlay.active{opacity:1;visibility:visible;}
+.followers-modal{background:#0f172a;border:1px solid rgba(255,255,255,0.1);border-radius:20px;width:90%;max-width:420px;max-height:70vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 25px 50px rgba(0,0,0,0.7);}
+.followers-modal-header{padding:1.5rem 2rem;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;}
+.followers-modal-list{overflow-y:auto;padding:1rem;}
+.follow-user-row{display:flex;align-items:center;gap:1rem;padding:0.8rem;border-radius:10px;transition:0.2s;cursor:pointer;}
+.follow-user-row:hover{background:rgba(59,130,246,0.1);}
+.follow-user-row .follow-btn-inline{margin-left:auto;padding:0.4rem 1rem;font-size:0.75rem;border-radius:20px;border:1px solid var(--primary);background:transparent;color:var(--primary);cursor:pointer;font-weight:600;transition:0.2s;}
+.follow-user-row .follow-btn-inline:hover{background:var(--primary);color:white;}
+.follow-user-row .follow-btn-inline.following{background:rgba(239,68,68,0.1);border-color:var(--danger);color:var(--danger);}
+.follow-user-row .follow-btn-inline.following:hover{background:var(--danger);color:white;}
+
+/* ========== CHAT MESSENGER ========== */
+.chat-container{display:flex;height:calc(100vh - 180px);border-radius:var(--radius-lg);overflow:hidden;border:var(--glass-border);box-shadow:var(--shadow-lg);background:rgba(15,23,42,0.4);}
+.chat-sidebar{width:340px;background:rgba(15,23,42,0.95);border-right:var(--glass-border);display:flex;flex-direction:column;flex-shrink:0;}
+@media(max-width:900px){
+  .chat-sidebar{width:100%;border-right:none;border-bottom:var(--glass-border);height:220px;}
+  .chat-container{flex-direction:column;height:auto;min-height:calc(100vh - 180px);}
+}
+.chat-list{flex:1;overflow-y:auto;padding:0.5rem;}
+.chat-contact{padding:1rem;margin-bottom:0.25rem;border-radius:var(--radius-md);display:flex;align-items:center;gap:1rem;cursor:pointer;transition:var(--transition-fast);position:relative;}
+.chat-contact:hover,.chat-contact.active{background:rgba(59,130,246,0.15);}
+.chat-contact-avatar{position:relative;flex-shrink:0;}
+.online-dot{position:absolute;bottom:0;right:0;width:14px;height:14px;background:var(--success);border-radius:50%;border:3px solid var(--bg-base);}
+
+.chat-main{flex:1;display:flex;flex-direction:column;background:rgba(3,7,18,0.8);position:relative;min-width:0;}
+.chat-header{padding:1rem 2rem;background:rgba(15,23,42,0.95);border-bottom:var(--glass-border);display:flex;justify-content:space-between;align-items:center;backdrop-filter:blur(10px);z-index:10;flex-wrap:wrap;gap:0.5rem;flex-shrink:0;}
+
+.chat-messages{flex:1;padding:1.5rem 2rem;overflow-y:auto;display:flex;flex-direction:column;justify-content:flex-end;gap:0;scroll-behavior:smooth;min-height:0;}
+.chat-messages-inner{display:flex;flex-direction:column;gap:4px;justify-content:flex-end;}
+
+.msg-group{display:flex;flex-direction:column;margin-bottom:4px;}
+.msg-row{display:flex;align-items:flex-end;gap:8px;margin-bottom:2px;position:relative;}
+.msg-row.mine{flex-direction:row-reverse;}
+.msg-row.system-row{justify-content:center;margin:10px 0;}
+
+.msg-bubble{max-width:65%;padding:10px 14px;font-size:0.94rem;border-radius:18px;position:relative;word-wrap:break-word;word-break:break-word;line-height:1.45;animation:msgPop 0.2s cubic-bezier(0.34,1.56,0.64,1) both;cursor:pointer;user-select:none;}
+@keyframes msgPop{from{opacity:0;transform:scale(0.85) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+
+.msg-bubble.received{background:#1e2a3a;color:#f0f4f8;border-bottom-left-radius:4px;}
+.msg-bubble.sent{background:linear-gradient(135deg,#0084ff,#0099e6);color:white;border-bottom-right-radius:4px;}
+.msg-bubble.system-bubble{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);color:var(--text-muted);font-size:0.78rem;border-radius:12px;padding:5px 14px;max-width:80%;text-align:center;}
+.msg-bubble.deleted{background:rgba(255,255,255,0.04)!important;border:1px solid rgba(255,255,255,0.06)!important;font-style:italic;color:rgba(255,255,255,0.3)!important;}
+.msg-bubble.edited::after{content:' (editada)';font-size:0.7rem;opacity:0.5;}
+
+/* Audio message */
+.audio-msg{display:flex;align-items:center;gap:10px;min-width:200px;}
+.audio-play-btn{width:36px;height:36px;border-radius:50%;border:none;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:0.2s;font-size:0.9rem;}
+.msg-bubble.sent .audio-play-btn{background:rgba(255,255,255,0.2);color:white;}
+.msg-bubble.sent .audio-play-btn:hover{background:rgba(255,255,255,0.35);}
+.msg-bubble.received .audio-play-btn{background:rgba(59,130,246,0.3);color:var(--primary);}
+.msg-bubble.received .audio-play-btn:hover{background:rgba(59,130,246,0.5);}
+.audio-waveform{flex:1;height:28px;position:relative;cursor:pointer;display:flex;align-items:center;gap:1px;}
+.audio-bar{width:3px;border-radius:2px;background:currentColor;opacity:0.5;transition:height 0.1s;}
+.audio-bar.active{opacity:1;}
+.audio-duration{font-size:0.72rem;opacity:0.7;white-space:nowrap;min-width:28px;}
+
+/* Recording indicator */
+.recording-indicator{display:none;align-items:center;gap:8px;padding:8px 14px;background:rgba(239,68,68,0.15);border:1px solid rgba(239,68,68,0.3);border-radius:25px;color:var(--danger);font-size:0.85rem;font-weight:600;}
+.recording-indicator.active{display:flex;}
+.rec-dot{width:10px;height:10px;background:var(--danger);border-radius:50%;animation:recPulse 1s infinite;}
+@keyframes recPulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.4;transform:scale(0.7);}}
+
+/* Edit mode banner */
+.edit-mode-banner{display:none;background:rgba(59,130,246,0.12);border-top:1px solid rgba(59,130,246,0.2);padding:8px 16px;align-items:center;gap:10px;font-size:0.85rem;color:var(--primary);flex-shrink:0;}
+.edit-mode-banner.active{display:flex;}
+.edit-cancel-btn{margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:4px;}
+.edit-cancel-btn:hover{color:var(--danger);}
+
+/* Reply banner */
+.reply-banner{display:none;background:rgba(59,130,246,0.08);border-left:3px solid var(--primary);border-top:1px solid rgba(59,130,246,0.15);padding:8px 16px;align-items:center;gap:10px;font-size:0.82rem;flex-shrink:0;}
+.reply-banner.active{display:flex;}
+.reply-cancel-btn{margin-left:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1rem;padding:4px;}
+
+.msg-time-label{font-size:0.68rem;color:rgba(255,255,255,0.35);margin:6px 0 2px;text-align:center;}
+.msg-avatar-small{width:28px;height:28px;border-radius:50%;background:#1e2a3a;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;color:white;background-size:cover;background-position:center;flex-shrink:0;align-self:flex-end;margin-bottom:2px;}
+.msg-avatar-small.hidden{visibility:hidden;}
+.msg-reactions{font-size:0.8rem;position:absolute;bottom:-10px;right:8px;background:rgba(30,42,58,0.95);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:2px 6px;cursor:pointer;z-index:2;}
+.msg-reaction-mine{left:8px;right:auto;}
+
+/* Message status ticks */
+.msg-status{font-size:0.7rem;opacity:0.6;margin-left:4px;display:inline;}
+
+/* Context menu */
+.msg-context-menu{position:fixed;background:rgba(15,23,42,0.98);border:1px solid rgba(255,255,255,0.12);border-radius:14px;box-shadow:0 15px 40px rgba(0,0,0,0.7);z-index:9999;padding:6px 0;min-width:200px;display:none;backdrop-filter:blur(10px);animation:menuPop 0.15s cubic-bezier(0.34,1.56,0.64,1) both;}
+@keyframes menuPop{from{opacity:0;transform:scale(0.9);}to{opacity:1;transform:scale(1);}}
+.msg-context-menu .emoji-row{display:flex;justify-content:space-around;padding:10px 14px;border-bottom:1px solid rgba(255,255,255,0.08);font-size:1.4rem;}
+.msg-context-menu .emoji-row span{cursor:pointer;transition:0.15s;display:inline-block;}
+.msg-context-menu .emoji-row span:hover{transform:scale(1.5);}
+.msg-context-menu button{width:100%;text-align:left;padding:10px 16px;background:none;border:none;color:white;font-size:0.9rem;cursor:pointer;display:flex;gap:10px;align-items:center;transition:0.15s;}
+.msg-context-menu button:hover{background:rgba(59,130,246,0.2);}
+.msg-context-menu .divider{height:1px;background:rgba(255,255,255,0.07);margin:4px 0;}
+
+.chat-input-area{padding:0.8rem 1.5rem;background:rgba(15,23,42,0.97);border-top:var(--glass-border);display:flex;gap:0.6rem;align-items:center;z-index:10;flex-shrink:0;position:relative;}
+.chat-action-btn{background:transparent;border:none;color:var(--text-muted);font-size:1.2rem;cursor:pointer;padding:0.5rem;transition:var(--transition-fast);display:flex;align-items:center;justify-content:center;border-radius:50%;width:38px;height:38px;}
+.chat-action-btn:hover{color:var(--primary);background:rgba(59,130,246,0.1);}
+.chat-action-btn.recording-active{color:var(--danger);background:rgba(239,68,68,0.15);animation:recPulse 1s infinite;}
+
+/* Send/Mic button toggle */
+#btn-send-msg{padding:0.75rem 1rem;border-radius:50%;min-width:44px;height:44px;box-shadow:0 4px 15px rgba(59,130,246,0.4);transition:all 0.2s;}
+
+/* Typing indicator */
+.typing-indicator{display:none;align-items:center;gap:6px;padding:8px 14px;background:#1e2a3a;border-radius:18px;border-bottom-left-radius:4px;width:fit-content;margin-bottom:4px;}
+.typing-dot{width:7px;height:7px;background:#94a3b8;border-radius:50%;animation:typingBounce 1.2s infinite;}
+.typing-dot:nth-child(2){animation-delay:0.2s;}
+.typing-dot:nth-child(3){animation-delay:0.4s;}
+@keyframes typingBounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
+
+/* AFFILIATE SYSTEM */
+.affiliate-modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:4000;opacity:0;visibility:hidden;transition:0.3s;}
+.affiliate-modal-overlay.active{opacity:1;visibility:visible;}
+.affiliate-modal{background:linear-gradient(160deg,#0d1829,#0a1020);border:1px solid rgba(59,130,246,0.25);border-radius:22px;width:92%;max-width:520px;max-height:90vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,0.8),0 0 40px rgba(59,130,246,0.08);}
+.affiliate-modal-header{padding:2rem 2rem 1rem;border-bottom:1px solid rgba(255,255,255,0.07);position:sticky;top:0;background:linear-gradient(160deg,#0d1829,#0a1020);z-index:2;}
+.affiliate-modal-body{padding:1.5rem 2rem 2rem;}
+.affiliate-success{display:none;flex-direction:column;align-items:center;justify-content:center;padding:3rem 2rem;text-align:center;gap:1rem;}
+.affiliate-success-icon{width:80px;height:80px;border-radius:50%;background:rgba(16,185,129,0.15);border:2px solid rgba(16,185,129,0.4);display:flex;align-items:center;justify-content:center;font-size:2.5rem;animation:successPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both;}
+@keyframes successPop{from{opacity:0;transform:scale(0.3);}to{opacity:1;transform:scale(1);}}
+.commission-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.3);color:var(--success);padding:0.5rem 1.2rem;border-radius:30px;font-size:0.9rem;font-weight:700;}
+.affiliate-product-preview{display:flex;align-items:center;gap:1rem;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:1rem;margin-bottom:1.5rem;}
+
+/* Affiliate settings modal */
+.aff-settings-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.88);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;z-index:5000;opacity:0;visibility:hidden;transition:0.3s;}
+.aff-settings-overlay.active{opacity:1;visibility:visible;}
+.aff-settings-modal{background:linear-gradient(160deg,#0d1829,#0a1020);border:1px solid rgba(59,130,246,0.3);border-radius:22px;width:92%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 30px 60px rgba(0,0,0,0.8);}
+.aff-settings-header{padding:2rem;border-bottom:1px solid rgba(255,255,255,0.07);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:linear-gradient(160deg,#0d1829,#0a1020);z-index:2;}
+.aff-settings-body{padding:2rem;}
+.commission-slider{-webkit-appearance:none;appearance:none;width:100%;height:6px;border-radius:3px;background:rgba(255,255,255,0.1);outline:none;cursor:pointer;}
+.commission-slider::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;background:var(--primary);cursor:pointer;box-shadow:0 0 10px var(--primary-glow);border:2px solid white;}
+.commission-preview{background:linear-gradient(135deg,rgba(59,130,246,0.1),rgba(139,92,246,0.1));border:1px solid rgba(59,130,246,0.2);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;}
+.commission-value-display{font-size:3rem;font-weight:900;color:var(--primary);text-shadow:0 0 20px var(--primary-glow);}
+.toggle-switch{position:relative;display:inline-block;width:52px;height:28px;}
+.toggle-switch input{opacity:0;width:0;height:0;}
+.toggle-slider{position:absolute;cursor:pointer;top:0;left:0;right:0;bottom:0;background:rgba(255,255,255,0.15);transition:0.3s;border-radius:28px;}
+.toggle-slider:before{position:absolute;content:"";height:20px;width:20px;left:4px;bottom:4px;background:white;transition:0.3s;border-radius:50%;}
+.toggle-switch input:checked + .toggle-slider{background:var(--primary);}
+.toggle-switch input:checked + .toggle-slider:before{transform:translateX(24px);}
+.affiliates-list-table{width:100%;border-collapse:collapse;margin-top:1rem;}
+.affiliates-list-table th{padding:0.8rem;border-bottom:1px solid rgba(255,255,255,0.08);font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;}
+.affiliates-list-table td{padding:0.8rem;border-bottom:1px solid rgba(255,255,255,0.04);font-size:0.85rem;color:var(--text-muted);}
+.aff-status-badge{padding:3px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;}
+.aff-status-pending{background:rgba(245,158,11,0.15);color:var(--warning);}
+.aff-status-approved{background:rgba(16,185,129,0.15);color:var(--success);}
+.aff-status-rejected{background:rgba(239,68,68,0.15);color:var(--danger);}
+
+/* Upload/Modals */
+.file-drop-area{border:2px dashed rgba(255,255,255,0.2);border-radius:var(--radius-lg);padding:3rem 2rem;text-align:center;cursor:pointer;transition:var(--transition-normal);background:rgba(0,0,0,0.2);position:relative;overflow:hidden;}
+.file-drop-area:hover{border-color:var(--primary);background:rgba(59,130,246,0.05);}
+.preview-container{margin-top:1rem;border-radius:var(--radius-md);overflow:hidden;max-height:250px;display:none;justify-content:center;background:#000;border:var(--glass-border);}
+.preview-container img{max-width:100%;object-fit:contain;}
+.avatar-upload-wrapper{display:flex;align-items:center;gap:2rem;margin-bottom:1rem;flex-wrap:wrap;}
+.avatar-preview-box{width:100px;height:100px;border-radius:50%;border:3px dashed var(--primary);background-size:cover;background-position:center;background-color:var(--glass-highlight);display:flex;align-items:center;justify-content:center;overflow:hidden;position:relative;}
+
+#toast-container{position:fixed;bottom:2rem;right:2rem;z-index:9999;display:flex;flex-direction:column;gap:1rem;}
+.toast{min-width:300px;background:var(--glass-bg);backdrop-filter:blur(10px);border:var(--glass-border);border-left:4px solid var(--info);padding:1.2rem;border-radius:var(--radius-md);box-shadow:var(--shadow-lg);display:flex;align-items:center;gap:1rem;animation:slideInRight 0.3s ease forwards;}
+.toast.success{border-left-color:var(--success);}
+.toast.error{border-left-color:var(--danger);}
+@keyframes slideInRight{from{transform:translateX(100%);opacity:0;}to{transform:translateX(0);opacity:1;}}
+@keyframes fadeOut{to{opacity:0;transform:translateY(-10px);}}
+
+.modal-overlay{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;z-index:2000;opacity:0;visibility:hidden;transition:var(--transition-normal);}
+.modal-overlay.active{opacity:1;visibility:visible;}
+.modal-content{background:var(--glass-bg);border:var(--glass-border);padding:2.5rem;border-radius:var(--radius-lg);width:90%;max-width:500px;transform:scale(0.9);transition:var(--transition-normal);box-shadow:var(--shadow-lg);}
+.modal-overlay.active .modal-content{transform:scale(1);}
+#auth-overlay{z-index:3000;background:rgba(3,7,18,0.95);}
+.auth-box{border-top:4px solid var(--primary);padding:3.5rem;max-width:450px;width:90%;margin:0 auto;}
+
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-track{background:transparent;}
+::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12);border-radius:4px;}
+::-webkit-scrollbar-thumb:hover{background:rgba(255,255,255,0.25);}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<div id="app-container">
+<div id="sidebar-overlay" class="sidebar-overlay"></div>
+
+<!-- AUTH -->
+<div id="auth-overlay" class="modal-overlay active">
+  <div class="auth-box glass-panel">
+    <div style="text-align:center;margin-bottom:2.5rem;">
+      <i class="fas fa-network-wired" style="font-size:3rem;color:var(--primary);margin-bottom:1rem;filter:drop-shadow(0 0 10px var(--primary-glow));"></i>
+      <h2 id="auth-title" style="font-size:2.2rem;">Bem-vindo ao Breakthe<span style="color:var(--primary);">system</span></h2>
+      <p id="auth-subtitle" style="margin-top:0.5rem;font-size:0.9rem;">Conecte-se à rede primária.</p>
+    </div>
+    <form id="auth-form">
+      <div class="form-group" id="name-form-group" style="display:none;">
+        <label class="form-label">Identificação (Nome)</label>
+        <div style="position:relative;"><i class="fas fa-user" style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i><input type="text" id="auth-name" class="form-control" style="padding-left:2.8rem;" placeholder="Seu nome no sistema"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">E-mail de Acesso</label>
+        <div style="position:relative;"><i class="fas fa-envelope" style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i><input type="email" id="auth-email" class="form-control" style="padding-left:2.8rem;" placeholder="usuario@dominio.com" required></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Código de Segurança</label>
+        <div style="position:relative;"><i class="fas fa-lock" style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i><input type="password" id="auth-pass" class="form-control" style="padding-left:2.8rem;" placeholder="" required></div>
+      </div>
+      <button type="submit" id="auth-submit-btn" class="btn btn-primary" style="width:100%;padding:1.2rem;font-size:1.1rem;margin-top:1.5rem;">INICIALIZAR SESSÃO <i class="fas fa-arrow-right" style="margin-left:0.5rem;"></i></button>
+      <p style="text-align:center;margin-top:1.5rem;font-size:0.9rem;"><a href="#" id="toggle-auth-mode" style="color:var(--secondary);">Não tem uma conta? Crie uma!</a></p>
+    </form>
+  </div>
+</div>
+
+<!-- SIDEBAR -->
+<aside id="sidebar">
+  <div class="sidebar-header">
+    <h2>Breakthe<span>system</span></h2>
+    <button id="sidebar-close-btn" class="sidebar-close-btn"><i class="fas fa-times"></i></button>
+  </div>
+  <nav class="nav-menu">
+    <div class="nav-item active" data-target="view-dashboard"><i class="fas fa-chart-line"></i><span>Dashboard Central</span></div>
+    <div class="nav-item" data-target="view-marketplace"><i class="fas fa-store"></i><span>Marketplace</span></div>
+    <div class="nav-item" data-target="view-ranking"><i class="fas fa-trophy"></i><span>Ranking Global</span></div>
+    <div class="nav-item" data-target="view-profile" id="nav-meu-perfil"><i class="fas fa-id-badge"></i><span>Meu Perfil</span></div>
+    <div class="nav-item" data-target="view-create-product"><i class="fas fa-cloud-upload-alt"></i><span>Publicar Produto</span></div>
+    <div class="nav-item" data-target="view-chat"><i class="fas fa-comments"></i><span>Transmissões</span><div id="global-nav-dot" class="notification-dot"></div></div>
+    <div class="nav-item" data-target="view-settings"><i class="fas fa-cog"></i><span>Configurações</span></div>
+  </nav>
+  <div style="padding:2rem;border-top:var(--glass-border);">
+    <div class="user-info" style="margin-bottom:1rem;background:rgba(0,0,0,0.2);cursor:default;">
+      <div class="avatar online" id="sidebar-avatar">U</div>
+      <div style="overflow:hidden;"><strong id="sidebar-name" style="display:block;white-space:nowrap;text-overflow:ellipsis;font-size:0.9rem;">Carregando...</strong><small style="color:var(--success);font-size:0.75rem;">Conectado</small></div>
+    </div>
+    <button onclick="app.logout()" class="btn btn-danger" style="width:100%;"><i class="fas fa-sign-out-alt"></i> Desconectar</button>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main id="main-content">
+  <header id="topbar">
+    <div style="display:flex;align-items:center;">
+      <button id="hamburger-btn" class="hamburger-btn"><i class="fas fa-bars"></i></button>
+      <div>
+        <h3 id="current-view-title" style="font-size:1.5rem;font-weight:400;color:var(--text-main);">Dashboard</h3>
+        <p id="current-view-subtitle" style="font-size:0.85rem;color:var(--text-muted);margin-top:0.2rem;">Visão geral das suas operações.</p>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:2rem;">
+      <div style="text-align:right;">
+        <span style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">Saldo Disponível</span>
+        <div id="header-balance" style="font-size:1.5rem;font-weight:800;color:var(--secondary);">Db 0.00</div>
+      </div>
+      <div id="header-avatar" class="avatar" onclick="app.viewUserProfile(app.currentUser.uid)" style="cursor:pointer;border-color:var(--primary);">U</div>
+    </div>
+  </header>
+
+  <!-- DASHBOARD -->
+  <section id="view-dashboard" class="view-section active">
+    <div class="grid-3" style="margin-bottom:2.5rem;">
+      <div class="card glass-panel stat-card"><div class="stat-icon"><i class="fas fa-wallet"></i></div><div class="stat-info"><h4>Receita Total</h4><h2 id="dash-revenue"><span>Db</span> 0.00</h2></div></div>
+      <div class="card glass-panel stat-card"><div class="stat-icon" style="background:rgba(16,185,129,0.1);color:var(--success);border-color:rgba(16,185,129,0.3);"><i class="fas fa-check-circle"></i></div><div class="stat-info"><h4>Vendas Processadas</h4><h2 id="dash-sales-count">0</h2></div></div>
+      <div class="card glass-panel stat-card"><div class="stat-icon" style="background:rgba(139,92,246,0.1);color:var(--accent);border-color:rgba(139,92,246,0.3);"><i class="fas fa-box-open"></i></div><div class="stat-info"><h4>Meus Produtos</h4><h2 id="dash-products-count">0</h2></div></div>
+    </div>
+    <div class="grid-2" style="margin-bottom:2.5rem;">
+      <div class="card glass-panel"><h3 style="margin-bottom:1.5rem;"><i class="fas fa-chart-area"></i> Fluxo Financeiro</h3><div class="chart-container"><canvas id="financeChart"></canvas></div></div>
+      <div class="card glass-panel" style="display:flex;flex-direction:column;"><h3 style="margin-bottom:1.5rem;"><i class="fas fa-bolt"></i> Últimas Movimentações</h3><div style="flex:1;overflow-y:auto;max-height:300px;"><table><tbody id="transactions-list-mini"></tbody></table></div></div>
+    </div>
+  </section>
+
+  <!-- MARKETPLACE -->
+  <section id="view-marketplace" class="view-section">
+    <div class="glass-panel" style="padding:1.5rem 2rem;border-radius:var(--radius-lg);margin-bottom:2.5rem;display:flex;gap:1rem;align-items:center;flex-wrap:wrap;">
+      <div style="flex:1;min-width:300px;position:relative;"><i class="fas fa-search" style="position:absolute;left:1.2rem;top:50%;transform:translateY(-50%);color:var(--text-muted);"></i><input type="text" id="search-marketplace" class="form-control" placeholder="Buscar ativos e produtos..." style="padding-left:3rem;"></div>
+      <select id="filter-marketplace" class="form-control" style="width:auto;min-width:200px;">
+        <option value="all">Todas as Categorias</option>
+        <option value="Roupas">Roupas & Moda</option>
+        <option value="Bolsas">Bolsas & Malas</option>
+        <option value="Acessorios">Óculos, Relógios & Acessórios</option>
+        <option value="Eletronicos">Dispositivos & Eletrônicos</option>
+        <option value="Casa">Casa & Decoração</option>
+        <option value="Software">Software & Scripts</option>
+        <option value="Design">Design & UI Kits</option>
+        <option value="E-book">E-books & Documentos</option>
+        <option value="Arte Digital">Arte Digital & 3D</option>
+      </select>
+    </div>
+    <div id="marketplace-grid" class="grid-5"></div>
+  </section>
+
+  <!-- RANKING -->
+  <section id="view-ranking" class="view-section">
+    <div class="card glass-panel" style="max-width:1000px;margin:0 auto;">
+      <div style="text-align:center;margin-bottom:2rem;">
+        <i class="fas fa-crown" style="font-size:3rem;color:#FBBF24;margin-bottom:1rem;filter:drop-shadow(0 0 15px rgba(251,191,36,0.5));"></i>
+        <h2 style="font-size:2.5rem;">Elite do Sistema</h2>
+        <p style="margin-top:0.5rem;font-size:1.1rem;">Classificação gerada com base no lucro acumulado na plataforma.</p>
+      </div>
+      <div class="ranking-container">
+        <div id="ranking-list" style="display:flex;flex-direction:column;"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERFIL -->
+  <section id="view-profile" class="view-section"></section>
+
+  <!-- PUBLICAR PRODUTO -->
+  <section id="view-create-product" class="view-section">
+    <div class="card glass-panel" style="max-width:900px;margin:0 auto;">
+      <h2 style="margin-bottom:2rem;"><i class="fas fa-rocket" style="color:var(--primary);"></i> Lançar Novo Produto</h2>
+      <form id="form-create-product">
+        <div class="form-group"><label class="form-label">Título do Produto</label><input type="text" id="prod-title" class="form-control" placeholder="Ex: Óculos de Sol Polarizado, Script Python..." required></div>
+        <div class="form-group"><label class="form-label">Descrição Completa</label><textarea id="prod-desc" class="form-control" rows="6" placeholder="Explique os detalhes do produto, material, garantias ou funcionalidades..." required></textarea></div>
+        <div class="grid-2" style="gap:1.5rem;margin-bottom:1.5rem;">
+          <div class="form-group" style="margin:0;"><label class="form-label">Preço (em Dobras - Db)</label><div style="position:relative;"><span style="position:absolute;left:1rem;top:50%;transform:translateY(-50%);font-weight:bold;color:var(--text-muted);">Db</span><input type="number" id="prod-price" class="form-control" style="padding-left:3rem;" step="0.01" min="0.1" required></div></div>
+          <div class="form-group" style="margin:0;">
+            <label class="form-label">Categoria de Mercado</label>
+            <select id="prod-category" class="form-control" required>
+              <option value="" disabled selected>Selecione...</option>
+              <option value="Roupas">Roupas & Moda</option>
+              <option value="Bolsas">Bolsas & Malas</option>
+              <option value="Acessorios">Óculos, Relógios & Acessórios</option>
+              <option value="Eletronicos">Dispositivos & Eletrônicos</option>
+              <option value="Casa">Casa & Decoração</option>
+              <option value="Software">Software & Scripts</option>
+              <option value="Design">Design & UI Kits</option>
+              <option value="E-book">E-books & Documentos</option>
+              <option value="Arte Digital">Arte Digital & 3D</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- AFFILIATE CONFIG on product creation -->
+        <div class="card" style="background:rgba(139,92,246,0.06);border:1px solid rgba(139,92,246,0.2);border-radius:14px;padding:1.5rem;margin-bottom:1.5rem;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem;">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <i class="fas fa-handshake" style="color:var(--accent);font-size:1.2rem;"></i>
+              <h4 style="color:var(--accent);">Programa de Afiliados</h4>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="prod-affiliate-enabled" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <p style="font-size:0.85rem;margin-bottom:1.2rem;">Permita que outros vendam por você em troca de uma comissão.</p>
+          <div id="affiliate-config-area">
+            <div class="form-group" style="margin-bottom:1rem;">
+              <label class="form-label">Comissão por venda: <span id="prod-commission-display" style="color:var(--accent);font-weight:700;">20%</span></label>
+              <input type="range" class="commission-slider" id="prod-commission" min="5" max="80" value="20" oninput="document.getElementById('prod-commission-display').innerText=this.value+'%'">
+              <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-top:4px;"><span>5%</span><span>80%</span></div>
+            </div>
+            <div class="form-group" style="margin:0;">
+              <label class="form-label">Política de Aprovação</label>
+              <select id="prod-affiliate-approval" class="form-control">
+                <option value="auto">Automática (todos aprovados)</option>
+                <option value="manual">Manual (aprovar individualmente)</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:2rem;">
+          <label class="form-label"><i class="fas fa-images"></i> Fotos do Produto <span style="color:var(--text-muted);font-weight:400;">(até 6 fotos)</span></label>
+          <div id="drop-zone-img" class="file-drop-area" onclick="document.getElementById('prod-image-file').click()" style="cursor:pointer;"><i class="fas fa-camera" style="font-size:3rem;color:var(--primary);margin-bottom:1rem;"></i><h4>Clique para adicionar fotos</h4><p style="font-size:0.85rem;margin-top:0.3rem;">JPG, PNG, WebP – mín. 1 foto obrigatória</p><input type="file" id="prod-image-file" accept="image/*" multiple style="display:none;"></div>
+          <div id="prod-multi-img-grid" class="multi-img-grid" style="display:none;"></div>
+        </div>
+        <button type="submit" class="btn btn-primary" style="width:100%;padding:1.2rem;font-size:1.1rem;margin-top:1rem;"><i class="fas fa-globe"></i> Publicar no Universo Breakthesystem</button>
+      </form>
+    </div>
+  </section>
+
+  <!-- CHAT MESSENGER -->
+  <section id="view-chat" class="view-section">
+    <div class="chat-container">
+      <div class="chat-sidebar">
+        <div style="padding:1.2rem 1.5rem;border-bottom:var(--glass-border);display:flex;justify-content:space-between;align-items:center;">
+          <h3 style="font-size:1.1rem;font-weight:700;">Mensagens</h3>
+          <span class="badge" style="background:rgba(59,130,246,0.2);color:var(--primary);">Ativos</span>
+        </div>
+        <div id="chat-list-container" class="chat-list"></div>
+      </div>
+      <div id="chat-main-area" class="chat-main">
+        <div id="chat-empty-state" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-muted);">
+          <div style="width:90px;height:90px;border-radius:50%;background:rgba(255,255,255,0.04);display:flex;align-items:center;justify-content:center;margin-bottom:1.5rem;border:1px solid rgba(255,255,255,0.06);">
+            <i class="fas fa-paper-plane" style="font-size:2.5rem;color:var(--primary);transform:translateX(-3px);"></i>
+          </div>
+          <h2 style="color:white;margin-bottom:0.5rem;">Suas Transmissões</h2>
+          <p>Selecione um contato para iniciar o diálogo.</p>
+        </div>
+        <div id="chat-active-state" style="display:none;flex-direction:column;height:100%;min-height:0;">
+          <div class="chat-header">
+            <div style="display:flex;align-items:center;gap:1rem;">
+              <div id="chat-active-avatar" class="avatar" style="width:42px;height:42px;border:none;">?</div>
+              <div><h3 id="chat-active-name" style="font-size:1.1rem;font-weight:600;">Comprador</h3><small id="chat-active-status" style="display:flex;align-items:center;gap:5px;color:var(--success);font-size:0.78rem;"><div style="width:7px;height:7px;border-radius:50%;background:var(--success);"></div>Online</small></div>
+            </div>
+            <div id="chat-tx-status" class="badge" style="display:none;">Aguardando</div>
+          </div>
+
+          <!-- Messages area -->
+          <div id="chat-messages-container" class="chat-messages">
+            <div id="chat-messages-inner" class="chat-messages-inner"></div>
+            <div class="typing-indicator" id="typing-indicator">
+              <div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>
+            </div>
+          </div>
+
+          <!-- Reply banner -->
+          <div id="reply-banner" class="reply-banner">
+            <i class="fas fa-reply" style="color:var(--primary);font-size:0.9rem;flex-shrink:0;"></i>
+            <div style="overflow:hidden;flex:1;">
+              <strong style="font-size:0.8rem;color:var(--primary);display:block;">Respondendo a</strong>
+              <span id="reply-banner-text" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;font-size:0.82rem;"></span>
+            </div>
+            <button class="reply-cancel-btn" onclick="app.cancelReply()"><i class="fas fa-times"></i></button>
+          </div>
+
+          <!-- Edit mode banner -->
+          <div id="edit-mode-banner" class="edit-mode-banner">
+            <i class="fas fa-pen" style="font-size:0.9rem;flex-shrink:0;"></i>
+            <span style="font-size:0.85rem;">A editar mensagem</span>
+            <span id="edit-preview-text" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:0.8rem;color:var(--text-muted);"></span>
+            <button class="edit-cancel-btn" onclick="app.cancelEdit()"><i class="fas fa-times"></i></button>
+          </div>
+
+          <!-- Recording indicator -->
+          <div style="padding:0 1.5rem;flex-shrink:0;">
+            <div id="recording-indicator" class="recording-indicator">
+              <div class="rec-dot"></div>
+              <span>A gravar áudio...</span>
+              <span id="recording-timer" style="margin-left:auto;font-weight:700;">0:00</span>
+              <button onclick="app.cancelRecording()" style="background:none;border:none;color:var(--danger);cursor:pointer;margin-left:8px;font-size:1rem;"><i class="fas fa-times"></i></button>
+            </div>
+          </div>
+
+          <div class="chat-input-area">
+            <!-- Action Buttons for Delivery Flow -->
+            <button id="btn-send-product" class="btn btn-info" style="display:none;padding:0.7rem 1rem;border-radius:20px;font-size:0.8rem;margin-right:10px;" title="Avisar Envio"><i class="fas fa-truck"></i> Avisar Envio</button>
+            <button id="btn-confirm-receipt" class="btn btn-success" style="display:none;padding:0.7rem 1rem;border-radius:20px;font-size:0.8rem;margin-right:10px;" title="Confirmar Recebimento"><i class="fas fa-check-circle"></i> Confirmar Entrega</button>
+            
+            <input type="file" id="chat-img-upload" accept="image/*" style="display:none;">
+            <button id="btn-attach-img" class="chat-action-btn" title="Enviar Foto"><i class="fas fa-image"></i></button>
+            <button class="chat-action-btn" id="emoji-toggle-btn" title="Emojis"><i class="fas fa-smile"></i></button>
+            <div id="quick-emoji-picker" style="display:none;position:absolute;bottom:70px;left:60px;background:rgba(15,23,42,0.98);padding:12px 16px;border-radius:14px;gap:12px;font-size:1.5rem;box-shadow:var(--shadow-lg);border:var(--glass-border);backdrop-filter:blur(10px);flex-wrap:wrap;width:200px;">
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('??')" style="cursor:pointer;">??</span>
+              <span onclick="app.addEmojiToInput('?')" style="cursor:pointer;">?</span>
+            </div>
+            <input type="text" id="chat-input-text" class="form-control" placeholder="Aa" style="border-radius:25px;flex:1;padding:0.8rem 1.2rem;background:rgba(255,255,255,0.06);font-size:0.95rem;">
+            <button id="btn-mic" class="chat-action-btn" title="Gravar áudio" style="width:44px;height:44px;background:linear-gradient(135deg,var(--primary),var(--secondary));color:white;border-radius:50%;box-shadow:0 4px 15px rgba(59,130,246,0.4);display:flex;align-items:center;justify-content:center;border:none;font-size:1rem;">
+              <i class="fas fa-microphone"></i>
+            </button>
+            <button id="btn-send-msg" class="btn btn-primary" style="display:none;padding:0.75rem 1rem;border-radius:50%;min-width:44px;height:44px;box-shadow:0 4px 15px rgba(59,130,246,0.4);">
+              <i class="fas fa-paper-plane" style="transform:translateX(-1px);"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Context menu -->
+    <div id="msg-context-menu" class="msg-context-menu">
+      <div class="emoji-row">
+        <span onclick="app.reactMsg('??')">??</span>
+        <span onclick="app.reactMsg('??')">??</span>
+        <span onclick="app.reactMsg('??')">??</span>
+        <span onclick="app.reactMsg('??')">??</span>
+        <span onclick="app.reactMsg('??')">??</span>
+      </div>
+      <button id="ctx-reply" onclick="app.replyToMessage()"><i class="fas fa-reply"></i> Responder</button>
+      <button id="ctx-edit" onclick="app.startEditMessage()" style="display:none;"><i class="fas fa-pen"></i> Editar mensagem</button>
+      <button onclick="app.copyMessage()"><i class="fas fa-copy"></i> Copiar</button>
+      <div class="divider"></div>
+      <button id="ctx-delete" onclick="app.deleteMessage()" style="color:var(--danger);"><i class="fas fa-trash-alt"></i> Eliminar para todos</button>
+    </div>
+  </section>
+
+  <!-- CONFIGURAÇÕES -->
+  <section id="view-settings" class="view-section">
+    <div class="grid-2">
+      <div class="card glass-panel">
+        <h3 style="border-bottom:var(--glass-border);padding-bottom:1rem;margin-bottom:2rem;"><i class="fas fa-user-edit"></i> Identidade Profissional</h3>
+        <form id="form-settings">
+          <div class="avatar-upload-wrapper">
+            <div id="settings-avatar-preview-box" class="avatar-preview-box"><span style="font-size:2rem;color:var(--text-muted);">U</span></div>
+            <div style="flex:1;"><label class="btn btn-outline" style="cursor:pointer;display:inline-block;margin-bottom:0.5rem;"><i class="fas fa-camera"></i> Alterar Foto<input type="file" id="set-avatar-file" accept="image/*" style="display:none;"></label><p style="font-size:0.8rem;">A foto ser salva no banco de dados.</p></div>
+          </div>
+          <div class="form-group"><label class="form-label">Nome de Exibição</label><input type="text" id="set-name" class="form-control" required></div>
+          <div class="form-group"><label class="form-label">Resumo Biográfico</label><textarea id="set-bio" class="form-control" rows="4"></textarea></div>
+          
+          <div class="form-group" style="display:flex; justify-content:space-between; align-items:center; background:rgba(0,0,0,0.3); padding:1rem; border-radius:10px; border:1px solid rgba(255,255,255,0.06);">
+            <div>
+              <strong style="font-size:0.95rem;">Perfil Privado</strong>
+              <p style="font-size:0.8rem; margin:0; margin-top:3px; color:var(--text-muted);">Apenas quem te segue verá seus números e produtos.</p>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="set-private">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <button type="submit" class="btn btn-primary" style="width:100%;"><i class="fas fa-save"></i> Gravar Modificações</button>
+        </form>
+      </div>
+      <div class="card glass-panel">
+        <h3 style="border-bottom:var(--glass-border);padding-bottom:1rem;margin-bottom:2rem;"><i class="fas fa-server"></i> Núcleo de Dados</h3>
+        <div style="background:rgba(0,0,0,0.3);padding:1.5rem;border-radius:var(--radius-md);margin-bottom:1.5rem;">
+          <h4 style="margin-bottom:0.5rem;color:var(--secondary);">Exportação Financeira</h4>
+          <p style="font-size:0.9rem;margin-bottom:1rem;">Gere uma planilha (.CSV) com todo o histórico.</p>
+          <button onclick="app.exportCSV()" class="btn btn-secondary" style="width:100%;"><i class="fas fa-file-csv"></i> Download CSV</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+</div>
+
+<!-- MODALS -->
+<div id="toast-container"></div>
+<div id="custom-confirm-modal" class="modal-overlay">
+  <div class="modal-content" style="text-align:center;">
+    <i class="fas fa-question-circle" style="font-size:4rem;color:var(--warning);margin-bottom:1.5rem;"></i>
+    <h2 id="confirm-title" style="margin-bottom:1rem;">Confirmação</h2>
+    <p id="confirm-msg" style="margin-bottom:2rem;font-size:1.1rem;"></p>
+    <div style="display:flex;gap:1rem;justify-content:center;">
+      <button id="confirm-btn-cancel" class="btn btn-secondary" style="flex:1;">Cancelar</button>
+      <button id="confirm-btn-ok" class="btn btn-primary" style="flex:1;">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Follow Modal -->
+<div id="followers-modal" class="followers-modal-overlay">
+  <div class="followers-modal">
+    <div class="followers-modal-header">
+      <h3 id="followers-modal-title" style="font-size:1.1rem;">Seguidores</h3>
+      <button onclick="document.getElementById('followers-modal').classList.remove('active')" style="background:none;border:none;color:var(--text-muted);font-size:1.3rem;cursor:pointer;"><i class="fas fa-times"></i></button>
+    </div>
+    <div id="followers-modal-list" class="followers-modal-list"></div>
+  </div>
+</div>
+
+<!-- AFFILIATE REQUEST Modal -->
+<div id="affiliate-modal" class="affiliate-modal-overlay">
+  <div class="affiliate-modal">
+    <div class="affiliate-modal-header">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+            <i class="fas fa-handshake" style="color:var(--accent);font-size:1.3rem;"></i>
+            <h3 style="font-size:1.2rem;font-weight:700;">Programa de Afiliados</h3>
+          </div>
+          <p style="font-size:0.82rem;margin:0;">Preencha os dados para se tornar afiliado e ganhar comissão.</p>
+        </div>
+        <button onclick="app.closeAffiliateModal()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text-muted);font-size:1.1rem;cursor:pointer;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;flex-shrink:0;"><i class="fas fa-times"></i></button>
+      </div>
+    </div>
+    <div id="affiliate-form-state" class="affiliate-modal-body">
+      <div class="affiliate-product-preview" style="margin-bottom:1.5rem;">
+        <div id="aff-prod-img" style="width:60px;height:60px;border-radius:8px;background:#1e293b;background-size:cover;background-position:center;flex-shrink:0;"></div>
+        <div>
+          <strong id="aff-prod-title" style="display:block;font-size:0.95rem;color:white;margin-bottom:4px;"></strong>
+          <div id="aff-commission-badge" class="commission-badge"><i class="fas fa-percent"></i> <span id="aff-commission-val"></span>% de comissão</div>
+          <div id="aff-approval-note" style="font-size:0.78rem;color:var(--text-muted);margin-top:6px;"></div>
+        </div>
+      </div>
+      <form id="affiliate-form" onsubmit="event.preventDefault(); app.submitAffiliation();">
+        <div class="form-group"><label class="form-label"><i class="fas fa-user" style="color:var(--primary);margin-right:6px;"></i>Nome Completo</label><input type="text" id="aff-name" class="form-control" placeholder="Como prefere ser chamado(a)" required></div>
+        <div class="form-group"><label class="form-label"><i class="fas fa-envelope" style="color:var(--primary);margin-right:6px;"></i>E-mail para Pagamentos</label><input type="email" id="aff-email" class="form-control" placeholder="email@pagamento.com" required></div>
+        <div class="form-group"><label class="form-label"><i class="fas fa-globe" style="color:var(--primary);margin-right:6px;"></i>Canal de Divulgação</label>
+          <select id="aff-channel" class="form-control" required>
+            <option value="" disabled selected>Selecione o canal principal...</option>
+            <option>Instagram</option><option>YouTube</option><option>TikTok</option><option>Twitter / X</option><option>Facebook</option><option>Blog / Site</option><option>WhatsApp / Grupos</option><option>Outro</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label"><i class="fas fa-link" style="color:var(--primary);margin-right:6px;"></i>Link ou @ do Perfil</label><input type="text" id="aff-link" class="form-control" placeholder="@seuperfil ou https://..." required></div>
+        <div class="form-group"><label class="form-label"><i class="fas fa-users" style="color:var(--primary);margin-right:6px;"></i>Tamanho estimado da audiência</label>
+          <select id="aff-audience" class="form-control" required>
+            <option value="" disabled selected>Selecione...</option>
+            <option>Menos de 1k</option><option>1k-10k</option><option>10k-50k</option><option>50k-200k</option><option>200k+</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label"><i class="fas fa-comment-dots" style="color:var(--primary);margin-right:6px;"></i>Por que quer divulgar este produto?</label><textarea id="aff-reason" class="form-control" rows="3" placeholder="Descreva sua estratgia..." required></textarea></div>
+        <button type="submit" id="aff-submit-btn" class="btn btn-primary" style="width:100%;padding:1rem;"><i class="fas fa-handshake"></i> Confirmar Afiliação</button>
+      </form>
+    </div>
+    <div id="affiliate-success-state" class="affiliate-success">
+      <div class="affiliate-success-icon">??</div>
+      <h2 style="font-size:1.6rem;margin-top:0.5rem;">Afiliado com Sucesso!</h2>
+      <p id="affiliate-success-msg" style="max-width:340px;text-align:center;"></p>
+      <div id="aff-success-commission" class="commission-badge" style="font-size:1rem;padding:0.7rem 1.8rem;margin:0.5rem 0;"></div>
+      <button onclick="app.closeAffiliateModal()" class="btn btn-secondary" style="margin-top:1rem;">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<!-- AFFILIATE SETTINGS Modal -->
+<div id="aff-settings-modal" class="aff-settings-overlay">
+  <div class="aff-settings-modal">
+    <div class="aff-settings-header">
+      <div>
+        <h3 style="font-size:1.3rem;"><i class="fas fa-sliders-h" style="color:var(--accent);margin-right:8px;"></i>Configurar Afiliados</h3>
+        <p id="aff-settings-prod-name" style="font-size:0.85rem;margin-top:2px;"></p>
+      </div>
+      <button onclick="app.closeAffSettings()" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:var(--text-muted);cursor:pointer;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="aff-settings-body">
+      <!-- Commission preview -->
+      <div class="commission-preview" style="text-align:center;margin-bottom:1.5rem;">
+        <div style="font-size:0.8rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px;">Comissão Atual</div>
+        <div class="commission-value-display" id="aff-settings-commission-display">20%</div>
+        <div style="font-size:0.85rem;color:var(--text-muted);margin-top:4px;">por venda realizada pelo afiliado</div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Ajustar comissão: <strong id="aff-settings-commission-label" style="color:var(--accent);">20%</strong></label>
+        <input type="range" class="commission-slider" id="aff-settings-commission" min="5" max="80" value="20"
+          oninput="document.getElementById('aff-settings-commission-display').innerText=this.value+'%';document.getElementById('aff-settings-commission-label').innerText=this.value+'%'">
+        <div style="display:flex;justify-content:space-between;font-size:0.75rem;color:var(--text-muted);margin-top:4px;"><span>5% (mín.)</span><span>80% (máx.)</span></div>
+      </div>
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06);">
+          <div>
+            <strong style="font-size:0.9rem;">Programa Ativo</strong>
+            <p style="font-size:0.8rem;margin-top:2px;">Permitir que outros se afiliem</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="aff-settings-enabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:1rem;background:rgba(0,0,0,0.3);border-radius:10px;border:1px solid rgba(255,255,255,0.06);">
+          <div>
+            <strong style="font-size:0.9rem;">Aprovao Manual</strong>
+            <p style="font-size:0.8rem;margin-top:2px;">Revisar cada pedido individualmente</p>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="aff-settings-manual">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Mensagem para afiliados (opcional)</label>
+        <textarea id="aff-settings-message" class="form-control" rows="3" placeholder="Ex: Ol! Seja bem-vindo(a) ao programa. Aqui vai a estratgia que proponho..."></textarea>
+      </div>
+      <button onclick="app.saveAffSettings()" class="btn btn-primary" style="width:100%;margin-bottom:1rem;"><i class="fas fa-save"></i> Guardar Configurações</button>
+
+      <!-- Pending affiliates list -->
+      <div style="border-top:1px solid rgba(255,255,255,0.07);padding-top:1.5rem;margin-top:0.5rem;">
+        <h4 style="margin-bottom:1rem;display:flex;align-items:center;gap:8px;"><i class="fas fa-users" style="color:var(--primary);"></i>Afiliados do Produto <span id="aff-count-badge" class="badge" style="background:rgba(59,130,246,0.2);color:var(--primary);font-size:0.75rem;">0</span></h4>
+        <div id="affiliates-list-container">
+          <p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:2rem 0;">Nenhum afiliado ainda.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const firebaseConfig = {
+  apiKey: "AIzaSyAypHU2CQkxpqxNWe_-8q3T-n_1jRq_H9w",
+  authDomain: "break-plataforme.firebaseapp.com",
+  projectId: "break-plataforme",
+  storageBucket: "break-plataforme.firebasestorage.app",
+  messagingSenderId: "293034148991",
+  appId: "1:293034148991:web:8a5ab4f871477dcd436b4a"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ====== UI HELPERS ====== */
+const UI = {
+  toast(msg, type='info') {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    const icons = {success:'fa-check-circle',error:'fa-times-circle',info:'fa-info-circle'};
+    t.innerHTML = `<i class="fas ${icons[type]||icons.info}" style="font-size:1.3rem;color:${type==='success'?'var(--success)':type==='error'?'var(--danger)':'var(--info)'}"></i><div>${msg}</div>`;
+    c.appendChild(t);
+    setTimeout(()=>{t.style.animation='fadeOut 0.3s ease forwards';setTimeout(()=>t.remove(),300);},4000);
+  },
+  confirm(title, msg, cb) {
+    const m = document.getElementById('custom-confirm-modal');
+    document.getElementById('confirm-title').innerText = title;
+    document.getElementById('confirm-msg').innerText = msg;
+    m.classList.add('active');
+    document.getElementById('confirm-btn-ok').onclick = ()=>{m.classList.remove('active');cb(true);};
+    document.getElementById('confirm-btn-cancel').onclick = ()=>{m.classList.remove('active');cb(false);};
+  }
+};
+
+const ImageTools = {
+  resizeBase64(file, maxW, maxH, cb) {
+    const r = new FileReader();
+    r.onload = e => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let w=img.width, h=img.height;
+        if(w>h){if(w>maxW){h*=maxW/w;w=maxW;}}else{if(h>maxH){w*=maxH/h;h=maxH;}}
+        canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        cb(canvas.toDataURL('image/jpeg',0.82));
+      };
+      img.src = e.target.result;
+    };
+    r.readAsDataURL(file);
+  }
+};
+
+/* ====== AUDIO RECORDER ====== */
+const AudioRecorder = {
+  mediaRecorder: null,
+  chunks: [],
+  stream: null,
+  timerInterval: null,
+  seconds: 0,
+
+  async start() {
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      this.chunks = [];
+      this.seconds = 0;
+      this.mediaRecorder = new MediaRecorder(this.stream, { mimeType: 'audio/webm' });
+      this.mediaRecorder.ondataavailable = e => { if(e.data.size>0) this.chunks.push(e.data); };
+      this.mediaRecorder.start(100);
+      const timerEl = document.getElementById('recording-timer');
+      this.timerInterval = setInterval(() => {
+        this.seconds++;
+        const m = Math.floor(this.seconds/60);
+        const s = this.seconds % 60;
+        timerEl.innerText = `${m}:${s.toString().padStart(2,'0')}`;
+      }, 1000);
+      return true;
+    } catch(e) {
+      UI.toast("Microfone no disponvel ou permisso negada.", "error");
+      return false;
+    }
+  },
+
+  stop(save=true) {
+    return new Promise(resolve => {
+      clearInterval(this.timerInterval);
+      if(this.stream) this.stream.getTracks().forEach(t => t.stop());
+      if(!this.mediaRecorder || this.mediaRecorder.state === 'inactive') { resolve(null); return; }
+      this.mediaRecorder.onstop = () => {
+        if(!save || this.chunks.length === 0) { resolve(null); return; }
+        const blob = new Blob(this.chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = e => resolve({ base64: e.target.result, duration: this.seconds });
+        reader.readAsDataURL(blob);
+      };
+      this.mediaRecorder.stop();
+    });
+  },
+
+  cancel() {
+    clearInterval(this.timerInterval);
+    if(this.stream) this.stream.getTracks().forEach(t => t.stop());
+    if(this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+      this.mediaRecorder.ondataavailable = null;
+      this.mediaRecorder.onstop = null;
+      this.mediaRecorder.stop();
+    }
+    this.chunks = [];
+    this.seconds = 0;
+  }
+};
+
+/* ====== MAIN APP ====== */
+const app = {
+  currentUser: null,
+  userData: null,
+  viewingProfileId: null,
+  tempAvatarBase64: null,
+  tempProductImageBase64: null,
+  tempProductImages: [],
+  chartInstance: null,
+  authMode: 'login',
+  activeChatId: null,
+  contextMessageId: null,
+  editingMessageId: null,
+  replyingToMessage: null,
+  isRecording: false,
+  listeners: [],
+  localDB: { users: [], products: [], transactions: [], chats: [], affiliations: [] },
+  _affiliatingProductId: null,
+  _affiliatingProductObj: null,
+  _affSettingsProductId: null,
+  _payProductId: null,
+  _selectedPayMethod: null,
+  _selectedCrypto: null,
+  _detailProductId: null,
+  _detailCarouselIdx: 0,
+  _reviewRating: 0,
+
+  init() {
+    this.setupEvents();
+    this.initBackground();
+    this.updateAuthFormUI();
+    this.monitorAuthState();
+    document.addEventListener('click', e => {
+      if(!e.target.closest('.msg-context-menu') && !e.target.closest('[data-msgid]')) {
+        document.getElementById('msg-context-menu').style.display = 'none';
+      }
+      if(!e.target.closest('#quick-emoji-picker') && !e.target.closest('#emoji-toggle-btn')) {
+        document.getElementById('quick-emoji-picker').style.display = 'none';
+      }
+    });
+  },
+
+  monitorAuthState() {
+    auth.onAuthStateChanged(user => {
+      if(user) {
+        this.currentUser = user;
+        document.getElementById('auth-overlay').classList.remove('active');
+        this.startRealTimeListeners(user.uid);
+        this.switchView('view-dashboard');
+      } else {
+        this.logoutUI();
+      }
+    });
+  },
+
+  async processAuth(name, email, pass) {
+    const btn = document.getElementById('auth-submit-btn');
+    btn.disabled = true; btn.innerText = "Processando...";
+    try {
+      if(this.authMode === 'register') {
+        if(!name) throw new Error("O nome  obrigatrio!");
+        const cred = await auth.createUserWithEmailAndPassword(email, pass);
+        await db.collection('users').doc(cred.user.uid).set({
+          name, email, bio: '', avatar: null,
+          sales: 0, balance: 0, isPrivate: false,
+          followers: [], following: [],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        UI.toast("Conta registrada com sucesso!", "success");
+      } else {
+        await auth.signInWithEmailAndPassword(email, pass);
+        UI.toast("Bem-vindo de volta!", "success");
+      }
+      document.getElementById('auth-form').reset();
+    } catch(err) {
+      UI.toast(err.message, "error");
+    } finally {
+      btn.disabled = false;
+      this.updateAuthFormUI();
+    }
+  },
+
+  logout() { auth.signOut(); },
+  logoutUI() {
+    this.listeners.forEach(u => { try { u(); } catch(e){} });
+    this.listeners = [];
+    this.currentUser = null; this.userData = null;
+    document.getElementById('auth-overlay').classList.add('active');
+    this.authMode = 'login';
+    this.updateAuthFormUI();
+  },
+
+  updateAuthFormUI() {
+    const isLogin = this.authMode === 'login';
+    document.getElementById('auth-title').innerText = isLogin ? "Bem-vindo ao Breakthesystem" : "Crie sua Conta";
+    document.getElementById('auth-subtitle').innerText = isLogin ? "Conecte-se à rede primária." : "Junte-se à rede e comece a operar.";
+    document.getElementById('name-form-group').style.display = isLogin ? 'none' : 'block';
+    document.getElementById('auth-name')[isLogin ? 'removeAttribute' : 'setAttribute']('required','required');
+    document.getElementById('auth-submit-btn').innerHTML = isLogin
+      ? 'INICIALIZAR SESSÃO <i class="fas fa-arrow-right" style="margin-left:0.5rem;"></i>'
+      : 'CRIAR CONTA <i class="fas fa-user-plus" style="margin-left:0.5rem;"></i>';
+    document.getElementById('toggle-auth-mode').innerHTML = isLogin
+      ? 'Não tem uma conta? Crie uma!' : 'J tem uma conta? Faa Login!';
+  },
+
+  toggleAuthMode() {
+    this.authMode = this.authMode === 'login' ? 'register' : 'login';
+    this.updateAuthFormUI();
+  },
+
+  /* ====== REAL-TIME LISTENERS ====== */
+  startRealTimeListeners(uid) {
+    const uSub = db.collection('users').doc(uid).onSnapshot(doc => {
+      if(doc.exists) {
+        this.userData = { id: doc.id, ...doc.data() };
+        this.updateGlobalUI();
+        if(document.getElementById('view-dashboard').classList.contains('active')) this.renderDashboard();
+      }
+    });
+    this.listeners.push(uSub);
+
+    const allUSub = db.collection('users').onSnapshot(snap => {
+      this.localDB.users = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      if(document.getElementById('view-ranking').classList.contains('active')) this.renderRanking();
+    });
+    this.listeners.push(allUSub);
+
+    const pSub = db.collection('products').onSnapshot(snap => {
+      this.localDB.products = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      if(document.getElementById('view-marketplace').classList.contains('active')) this.renderMarketplace();
+    });
+    this.listeners.push(pSub);
+
+    const txSub = db.collection('transactions').where('participants','array-contains',uid).onSnapshot(snap => {
+      this.localDB.transactions = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      if(document.getElementById('view-dashboard').classList.contains('active')) this.renderDashboard();
+    });
+    this.listeners.push(txSub);
+
+    const cSub = db.collection('chats').where('participants','array-contains',uid).onSnapshot(snap => {
+      let hasNew = false;
+      const newChats = snap.docs.map(doc => {
+        const data = doc.data();
+        if(data.lastMessage && data.lastMessage.sender !== uid && data.lastMessage.sender !== 'system') {
+          const old = this.localDB.chats.find(c => c.id === doc.id);
+          if(!old || (old.lastMessage && old.lastMessage.id !== data.lastMessage.id)) hasNew = true;
+        }
+        return { id: doc.id, ...data };
+      });
+      this.localDB.chats = newChats;
+      if(hasNew && !document.getElementById('view-chat').classList.contains('active')) {
+        document.getElementById('global-nav-dot').style.display = 'block';
+      }
+      if(document.getElementById('view-chat').classList.contains('active')) this.renderChatList();
+      if(this.activeChatId) this.openChat(this.activeChatId); // Re-render chat correctly for statuses
+    });
+    this.listeners.push(cSub);
+
+    const affSub = db.collection('affiliations').where('affiliateId','==',uid).onSnapshot(snap => {
+      this.localDB.affiliations = snap.docs.map(d => ({id: d.id, ...d.data()}));
+    });
+    this.listeners.push(affSub);
+  },
+
+  /* ====== FOLLOW SYSTEM ====== */
+  async toggleFollow(targetUserId) {
+    if(!this.userData || targetUserId === this.currentUser.uid) return;
+    const myFollowing = this.userData.following || [];
+    const isFollowing = myFollowing.includes(targetUserId);
+    
+    // Atualizao otimista na UI (antes do banco terminar)
+    if(isFollowing) {
+      this.userData.following = myFollowing.filter(id => id !== targetUserId);
+      const target = this.localDB.users.find(u => u.id === targetUserId);
+      if(target) target.followers = (target.followers||[]).filter(id => id !== this.currentUser.uid);
+    } else {
+      this.userData.following = [...myFollowing, targetUserId];
+      const target = this.localDB.users.find(u => u.id === targetUserId);
+      if(target) target.followers = [...(target.followers||[]), this.currentUser.uid];
+    }
+    
+    if(document.getElementById('view-profile').classList.contains('active')) this.renderProfile();
+
+    try {
+      if(isFollowing) {
+        await db.collection('users').doc(this.currentUser.uid).update({ following: firebase.firestore.FieldValue.arrayRemove(targetUserId) });
+        await db.collection('users').doc(targetUserId).update({ followers: firebase.firestore.FieldValue.arrayRemove(this.currentUser.uid) });
+        UI.toast("Deixou de seguir.", "info");
+      } else {
+        await db.collection('users').doc(this.currentUser.uid).update({ following: firebase.firestore.FieldValue.arrayUnion(targetUserId) });
+        await db.collection('users').doc(targetUserId).update({ followers: firebase.firestore.FieldValue.arrayUnion(this.currentUser.uid) });
+        UI.toast("Seguindo agora!", "success");
+      }
+    } catch(e) { UI.toast("Erro ao processar.", "error"); }
+  },
+
+  showFollowersModal(userId, type) {
+    const u = this.localDB.users.find(x => x.id === userId);
+    if(!u) return;
+    const list = type === 'followers' ? (u.followers || []) : (u.following || []);
+    document.getElementById('followers-modal-title').innerText = type === 'followers' ? `Seguidores (${list.length})` : `Seguindo (${list.length})`;
+    const el = document.getElementById('followers-modal-list');
+    el.innerHTML = '';
+    if(list.length === 0) {
+      el.innerHTML = `<p style="text-align:center;padding:2rem;color:var(--text-muted);">Nenhum ${type==='followers'?'seguidor':'usurio seguido'} ainda.</p>`;
+    } else {
+      list.forEach(uid => {
+        const person = this.localDB.users.find(x => x.id === uid);
+        if(!person) return;
+        const amIFollowing = (this.userData.following||[]).includes(uid);
+        const isMe = uid === this.currentUser.uid;
+        el.insertAdjacentHTML('beforeend', `
+          <div class="follow-user-row" onclick="app.viewUserProfile('${uid}');document.getElementById('followers-modal').classList.remove('active');">
+            <div class="avatar" style="width:42px;height:42px;font-size:1rem;${person.avatar?`background-image:url('${person.avatar}')`:''}">${person.avatar?'':person.name.charAt(0)}</div>
+            <div><strong style="color:var(--text-main);font-size:0.95rem;">${person.name}</strong><br><small style="color:var(--text-muted);">${(person.followers||[]).length} seguidores</small></div>
+            ${!isMe ? `<button class="follow-btn-inline ${amIFollowing?'following':''}" onclick="event.stopPropagation();app.toggleFollow('${uid}').then(()=>app.showFollowersModal('${userId}','${type}'))">${amIFollowing?'Seguindo':'Seguir'}</button>` : ''}
+          </div>`);
+      });
+    }
+    document.getElementById('followers-modal').classList.add('active');
+  },
+
+  /* ====== AFFILIATE SYSTEM ====== */
+  openAffiliateModal(productId) {
+    const prod = this.localDB.products.find(p => p.id === productId);
+    if(!prod) return;
+    if(prod.affiliateEnabled === false) { UI.toast("Este produto no tem programa de afiliados ativo.", "info"); return; }
+
+    this._affiliatingProductId = productId;
+    this._affiliatingProductObj = prod;
+    const commission = prod.affiliateCommission || 20;
+
+    document.getElementById('aff-prod-title').innerText = prod.title;
+    document.getElementById('aff-prod-img').style.backgroundImage = `url('${prod.image||''}')`;
+    document.getElementById('aff-commission-val').innerText = commission;
+    document.getElementById('aff-approval-note').innerText = prod.affiliateApproval === 'manual'
+      ? '? Aprovao manual  o produtor ir analisar o seu pedido.'
+      : '? Aprovao automtica  ser aceite imediatamente.';
+
+    if(this.userData) {
+      document.getElementById('aff-name').value = this.userData.name || '';
+      document.getElementById('aff-email').value = this.userData.email || '';
+    }
+
+    document.getElementById('affiliate-form-state').style.display = 'block';
+    document.getElementById('affiliate-success-state').style.display = 'none';
+    document.getElementById('affiliate-modal').classList.add('active');
+  },
+
+  closeAffiliateModal() {
+    document.getElementById('affiliate-modal').classList.remove('active');
+    this._affiliatingProductId = null;
+    this._affiliatingProductObj = null;
+  },
+
+  async submitAffiliation() {
+    const btn = document.getElementById('aff-submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    const pId = this._affiliatingProductId;
+    const prod = this._affiliatingProductObj;
+    const isAutoApprove = (prod?.affiliateApproval || 'auto') === 'auto';
+    try {
+      await db.collection('affiliations').add({
+        productId: pId,
+        productTitle: prod?.title || '',
+        sellerId: prod?.sellerId || '',
+        affiliateId: this.currentUser.uid,
+        affiliateName: document.getElementById('aff-name').value,
+        affiliateEmail: document.getElementById('aff-email').value,
+        channel: document.getElementById('aff-channel').value,
+        profileLink: document.getElementById('aff-link').value,
+        audienceSize: document.getElementById('aff-audience').value,
+        reason: document.getElementById('aff-reason').value,
+        commission: prod?.affiliateCommission || 20,
+        status: isAutoApprove ? 'Aprovado' : 'Pendente',
+        createdAt: Date.now()
+      });
+      await db.collection('users').doc(this.currentUser.uid).update({
+        affiliatedProducts: firebase.firestore.FieldValue.arrayUnion(pId)
+      });
+      if(this.userData) this.userData.affiliatedProducts = [...(this.userData.affiliatedProducts||[]), pId];
+
+      document.getElementById('affiliate-form-state').style.display = 'none';
+      document.getElementById('aff-success-commission').innerHTML = `<i class="fas fa-percent"></i> ${prod?.affiliateCommission||20}% de comissão por venda`;
+      document.getElementById('affiliate-success-msg').innerText = isAutoApprove
+        ? 'Voc agora faz parte do programa de afiliados e foi aprovado automaticamente!'
+        : 'Pedido enviado! O produtor ir analisar e aprovar em breve.';
+      document.getElementById('affiliate-success-state').style.display = 'flex';
+      if(document.getElementById('view-marketplace').classList.contains('active')) this.renderMarketplace();
+    } catch(e) {
+      UI.toast("Erro ao registar afiliao.", "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '<i class="fas fa-handshake"></i> Confirmar Afiliação';
+    }
+  },
+
+  /* ====== AFFILIATE SETTINGS (owner) ====== */
+  async openAffSettings(productId) {
+    const prod = this.localDB.products.find(p => p.id === productId);
+    if(!prod) return;
+    this._affSettingsProductId = productId;
+
+    document.getElementById('aff-settings-prod-name').innerText = prod.title;
+    const comm = prod.affiliateCommission || 20;
+    document.getElementById('aff-settings-commission').value = comm;
+    document.getElementById('aff-settings-commission-display').innerText = comm + '%';
+    document.getElementById('aff-settings-commission-label').innerText = comm + '%';
+    document.getElementById('aff-settings-enabled').checked = prod.affiliateEnabled !== false;
+    document.getElementById('aff-settings-manual').checked = prod.affiliateApproval === 'manual';
+    document.getElementById('aff-settings-message').value = prod.affiliateMessage || '';
+
+    await this.loadAffiliatesForProduct(productId);
+    document.getElementById('aff-settings-modal').classList.add('active');
+  },
+
+  async loadAffiliatesForProduct(productId) {
+    const container = document.getElementById('affiliates-list-container');
+    container.innerHTML = '<p style="color:var(--text-muted);font-size:0.85rem;">Carregando...</p>';
+    try {
+      const snap = await db.collection('affiliations').where('productId','==',productId).get();
+      const affs = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      document.getElementById('aff-count-badge').innerText = affs.length;
+      if(affs.length === 0) {
+        container.innerHTML = '<p style="text-align:center;color:var(--text-muted);font-size:0.9rem;padding:1rem 0;">Nenhum afiliado ainda.</p>';
+        return;
+      }
+      container.innerHTML = `
+        <table class="affiliates-list-table">
+          <thead><tr><th>Nome</th><th>Canal</th><th>Audincia</th><th>Status</th><th>Aes</th></tr></thead>
+          <tbody id="affiliates-tbody"></tbody>
+        </table>`;
+      const tbody = document.getElementById('affiliates-tbody');
+      affs.forEach(a => {
+        tbody.insertAdjacentHTML('beforeend', `
+          <tr>
+            <td><strong style="color:white;">${a.affiliateName}</strong><br><span style="font-size:0.75rem;">${a.affiliateEmail}</span></td>
+            <td>${a.channel||'-'}</td>
+            <td>${a.audienceSize||'-'}</td>
+            <td><span class="aff-status-badge ${a.status==='Aprovado'?'aff-status-approved':a.status==='Rejeitado'?'aff-status-rejected':'aff-status-pending'}">${a.status}</span></td>
+            <td style="display:flex;gap:6px;">
+              ${a.status==='Pendente'?`<button onclick="app.updateAffiliateStatus('${a.id}','Aprovado')" style="background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3);color:var(--success);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;">Aprovar</button>
+              <button onclick="app.updateAffiliateStatus('${a.id}','Rejeitado')" style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.2);color:var(--danger);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:0.75rem;">Rejeitar</button>`
+              :'<span style="font-size:0.78rem;color:var(--text-muted);"></span>'}
+            </td>
+          </tr>`);
+      });
+    } catch(e) {
+      container.innerHTML = '<p style="color:var(--danger);font-size:0.85rem;">Erro ao carregar afiliados.</p>';
+    }
+  },
+
+  async updateAffiliateStatus(affId, status) {
+    try {
+      await db.collection('affiliations').doc(affId).update({ status });
+      UI.toast(`Afiliado ${status === 'Aprovado' ? 'aprovado' : 'rejeitado'} com sucesso!`, "success");
+      if(this._affSettingsProductId) await this.loadAffiliatesForProduct(this._affSettingsProductId);
+    } catch(e) { UI.toast("Erro ao atualizar status.", "error"); }
+  },
+
+  async saveAffSettings() {
+    const pId = this._affSettingsProductId;
+    if(!pId) return;
+    try {
+      await db.collection('products').doc(pId).update({
+        affiliateCommission: parseInt(document.getElementById('aff-settings-commission').value),
+        affiliateEnabled: document.getElementById('aff-settings-enabled').checked,
+        affiliateApproval: document.getElementById('aff-settings-manual').checked ? 'manual' : 'auto',
+        affiliateMessage: document.getElementById('aff-settings-message').value
+      });
+      UI.toast("Configurações salvas com sucesso!", "success");
+      this.closeAffSettings();
+    } catch(e) { UI.toast("Erro ao guardar configuraes.", "error"); }
+  },
+
+  closeAffSettings() {
+    document.getElementById('aff-settings-modal').classList.remove('active');
+    this._affSettingsProductId = null;
+  },
+
+  /* ====== CRUD ====== */
+  async createProduct(title, desc, price, cat) {
+    if(this.tempProductImages.length === 0) { UI.toast("Adicione pelo menos 1 foto do produto!", "error"); return; }
+    try {
+      const affiliateEnabled = document.getElementById('prod-affiliate-enabled').checked;
+      const affiliateCommission = parseInt(document.getElementById('prod-commission').value);
+      const affiliateApproval = document.getElementById('prod-affiliate-approval').value;
+      await db.collection('products').add({
+        sellerId: this.currentUser.uid, title, desc,
+        price: parseFloat(price), category: cat,
+        image: this.tempProductImages[0],
+        images: this.tempProductImages,
+        affiliateEnabled, affiliateCommission, affiliateApproval,
+        createdAt: Date.now(),
+        ratingSum: 0, ratingCount: 0
+      });
+      document.getElementById('form-create-product').reset();
+      document.getElementById('prod-commission-display').innerText = '20%';
+      this.tempProductImages = [];
+      this.tempProductImageBase64 = null;
+      this.renderProductImagePreviews();
+      UI.toast("Produto lançado com sucesso!", "success");
+      this.switchView('view-marketplace');
+    } catch(e) { UI.toast("Erro ao publicar.", "error"); }
+  },
+
+  buyProduct(pId) {
+    const prod = this.localDB.products.find(p => p.id === pId);
+    if(!prod) return;
+    this._payProductId = pId;
+    this._selectedPayMethod = null;
+    document.querySelectorAll('.payment-method').forEach(el => el.classList.remove('selected'));
+    document.querySelectorAll('.pm-form-area').forEach(el => el.style.display = 'none');
+    document.getElementById('pay-product-name').innerText = prod.title;
+    document.getElementById('pay-total').innerText = `Db ${prod.price.toFixed(2)}`;
+    document.getElementById('payment-overlay').classList.add('active');
+  },
+
+  selectPayment(method) {
+    this._selectedPayMethod = method;
+    document.querySelectorAll('.payment-method').forEach(el => el.classList.remove('selected'));
+    document.getElementById(`pm-${method}`).classList.add('selected');
+    document.querySelectorAll('.pm-form-area').forEach(el => el.style.display = 'none');
+    const formEl = document.getElementById(`pm-form-${method}`);
+    if(formEl) formEl.style.display = 'block';
+  },
+
+  selectCrypto(btn, coin) {
+    document.querySelectorAll('#pm-form-crypto .btn').forEach(b => b.classList.remove('btn-primary'));
+    btn.classList.add('btn-primary');
+    this._selectedCrypto = coin;
+    const addrs = { BTC:'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', USDT:'TRx1Ab3XyZ9mNoP2kL7vBcDeFgHiJk8', ETH:'0x71C7656EC7ab88b098defB751B7401B5f6d8976F' };
+    const addrEl = document.getElementById('crypto-addr');
+    addrEl.innerText = `Endereço ${coin}: ${addrs[coin]}`;
+    addrEl.style.display = 'block';
+  },
+
+  closePaymentModal() {
+    document.getElementById('payment-overlay').classList.remove('active');
+    this._payProductId = null;
+    this._selectedPayMethod = null;
+  },
+
+  async confirmPayment() {
+    if(!this._selectedPayMethod) { UI.toast("Selecione um método de pagamento!", "error"); return; }
+    const pId = this._payProductId;
+    const prod = this.localDB.products.find(p => p.id === pId);
+    if(!prod) return;
+    const btn = document.getElementById('pay-confirm-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processando...';
+    try {
+      const txRef = await db.collection('transactions').add({
+        pId: prod.id, pTitle: prod.title,
+        buyerId: this.currentUser.uid, sellerId: prod.sellerId,
+        amount: prod.price, status: 'Pendente Pagamento',
+        paymentMethod: this._selectedPayMethod,
+        date: Date.now(), participants: [this.currentUser.uid, prod.sellerId]
+      });
+      let chat = this.localDB.chats.find(c => c.participants.includes(this.currentUser.uid) && c.participants.includes(prod.sellerId));
+      const methodNames = {card:'Cartão',paypal:'PayPal',transfer:'Transferência',mpesa:'M-Pesa',crypto:this._selectedCrypto||'Crypto',applepay:'Apple/Google Pay'};
+      const methodName = methodNames[this._selectedPayMethod] || this._selectedPayMethod;
+      const systemMsg = { id:'msg_'+Date.now(), sender:'system', type:'text', content:`🛒 Aquisição de [${prod.title}] — Db ${prod.price.toFixed(2)} via ${methodName}. Aguardando envio.`, time: Date.now() };
+      let chatId;
+      if(!chat) {
+        const nc = await db.collection('chats').add({ participants: [this.currentUser.uid, prod.sellerId], txId: txRef.id, messages: [systemMsg], lastMessage: systemMsg });
+        chatId = nc.id;
+      } else {
+        chatId = chat.id;
+        await db.collection('chats').doc(chatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(systemMsg), lastMessage: systemMsg, txId: txRef.id });
+      }
+      this.closePaymentModal();
+      this.activeChatId = chatId;
+      this.switchView('view-chat');
+      this.openChat(chatId);
+      UI.toast("Pagamento registado! Chat da negociação aberto.", "success");
+    } catch(e) { UI.toast("Erro ao processar compra.", "error"); }
+    finally { btn.disabled = false; btn.innerHTML = '<i class="fas fa-shield-alt"></i> Confirmar Pagamento'; }
+  },
+
+  /* ====== MESSENGER ====== */
+  async sendChatMessage(type, content, extra={}) {
+    if(!content || !this.activeChatId) return;
+    const newMsg = {
+      id: 'msg_'+Date.now()+'_'+Math.random().toString(36).substr(2,9),
+      sender: this.currentUser.uid, type, content, time: Date.now(),
+      ...extra
+    };
+    if(this.editingMessageId) { await this.saveEditedMessage(content); return; }
+    if(this.replyingToMessage) {
+      newMsg.replyTo = { id: this.replyingToMessage.id, content: this.replyingToMessage.content, sender: this.replyingToMessage.sender };
+      this.cancelReply();
+    }
+    document.getElementById('chat-input-text').value = '';
+    this.toggleSendMic();
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    if(chat) { if(!chat.messages) chat.messages = []; chat.messages.push(newMsg); this.renderChatMessages(true); }
+    try { await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(newMsg), lastMessage: newMsg });
+    } catch(e) { UI.toast("Erro ao enviar.", "error"); }
+  },
+
+  sendChatText() {
+    const v = document.getElementById('chat-input-text').value.trim();
+    if(v) {
+      if(this.editingMessageId) { this.saveEditedMessage(v); return; }
+      this.sendChatMessage('text', v);
+    }
+  },
+
+  startEditMessage() {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const msg = chat?.messages?.find(m => m.id === this.contextMessageId);
+    document.getElementById('msg-context-menu').style.display = 'none';
+    if(!msg || msg.type !== 'text' || msg.sender !== this.currentUser.uid) { UI.toast("No  possvel editar esta mensagem.", "info"); return; }
+    this.editingMessageId = msg.id;
+    const inp = document.getElementById('chat-input-text');
+    inp.value = msg.content;
+    inp.focus();
+    document.getElementById('edit-mode-banner').classList.add('active');
+    document.getElementById('edit-preview-text').innerText = msg.content;
+    this.toggleSendMic();
+    document.getElementById('btn-send-msg').style.display = 'flex';
+    document.getElementById('btn-mic').style.display = 'none';
+  },
+
+  async saveEditedMessage(newContent) {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const oldMsg = chat?.messages?.find(m => m.id === this.editingMessageId);
+    if(!oldMsg) { this.cancelEdit(); return; }
+    const editedMsg = { ...oldMsg, content: newContent, edited: true, editedAt: Date.now() };
+    this.cancelEdit();
+    try {
+      await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayRemove(oldMsg) });
+      await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(editedMsg) });
+      UI.toast("Mensagem editada.", "success");
+    } catch(e) { UI.toast("Erro ao editar.", "error"); }
+    document.getElementById('chat-input-text').value = '';
+    this.toggleSendMic();
+  },
+
+  cancelEdit() {
+    this.editingMessageId = null;
+    document.getElementById('edit-mode-banner').classList.remove('active');
+    document.getElementById('chat-input-text').value = '';
+    this.toggleSendMic();
+  },
+
+  replyToMessage() {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const msg = chat?.messages?.find(m => m.id === this.contextMessageId);
+    document.getElementById('msg-context-menu').style.display = 'none';
+    if(!msg) return;
+    this.replyingToMessage = msg;
+    const senderUser = this.localDB.users.find(u => u.id === msg.sender);
+    const senderName = msg.sender === this.currentUser.uid ? 'Voc' : (senderUser?.name || 'Utilizador');
+    document.getElementById('reply-banner').classList.add('active');
+    document.getElementById('reply-banner-text').innerText = `${senderName}: ${msg.type === 'audio' ? '?? udio' : msg.type === 'image' ? '?? Imagem' : msg.content}`;
+    document.getElementById('chat-input-text').focus();
+  },
+
+  cancelReply() {
+    this.replyingToMessage = null;
+    document.getElementById('reply-banner').classList.remove('active');
+  },
+
+  addEmojiToInput(emoji) {
+    const inp = document.getElementById('chat-input-text');
+    inp.value += emoji;
+    inp.focus();
+    document.getElementById('quick-emoji-picker').style.display = 'none';
+    this.toggleSendMic();
+  },
+
+  toggleSendMic() {
+    const hasText = document.getElementById('chat-input-text').value.trim().length > 0;
+    document.getElementById('btn-send-msg').style.display = hasText ? 'flex' : 'none';
+    document.getElementById('btn-mic').style.display = hasText ? 'none' : 'flex';
+  },
+
+  async toggleRecording() {
+    if(this.isRecording) {
+      this.isRecording = false;
+      document.getElementById('btn-mic').classList.remove('recording-active');
+      document.getElementById('btn-mic').innerHTML = '<i class="fas fa-microphone"></i>';
+      document.getElementById('recording-indicator').classList.remove('active');
+      const result = await AudioRecorder.stop(true);
+      if(result) { await this.sendChatMessage('audio', result.base64, { duration: result.duration }); }
+    } else {
+      const started = await AudioRecorder.start();
+      if(started) {
+        this.isRecording = true;
+        document.getElementById('btn-mic').classList.add('recording-active');
+        document.getElementById('btn-mic').innerHTML = '<i class="fas fa-stop"></i>';
+        document.getElementById('recording-indicator').classList.add('active');
+        document.getElementById('recording-timer').innerText = '0:00';
+      }
+    }
+  },
+
+  cancelRecording() {
+    AudioRecorder.cancel();
+    this.isRecording = false;
+    document.getElementById('btn-mic').classList.remove('recording-active');
+    document.getElementById('btn-mic').innerHTML = '<i class="fas fa-microphone"></i>';
+    document.getElementById('recording-indicator').classList.remove('active');
+  },
+
+  async deleteMessage() {
+    if(!this.contextMessageId || !this.activeChatId) return;
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const msgObj = chat?.messages?.find(m => m.id === this.contextMessageId);
+    if(!msgObj) return;
+    document.getElementById('msg-context-menu').style.display = 'none';
+    const deletedMsg = { ...msgObj, deleted: true, content: 'Mensagem eliminada', type: 'text' };
+    try {
+      await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayRemove(msgObj) });
+      await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(deletedMsg) });
+      UI.toast("Mensagem eliminada.", "success");
+    } catch(e) { console.error(e); }
+  },
+
+  copyMessage() {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const msg = chat?.messages?.find(m => m.id === this.contextMessageId);
+    if(msg && msg.type === 'text') { navigator.clipboard.writeText(msg.content).then(()=>UI.toast("Copiado!", "success")); }
+    document.getElementById('msg-context-menu').style.display = 'none';
+  },
+
+  async reactMsg(emoji) {
+    if(!this.contextMessageId || !this.activeChatId) return;
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const oldMsg = chat?.messages?.find(m => m.id === this.contextMessageId);
+    document.getElementById('msg-context-menu').style.display = 'none';
+    if(oldMsg) {
+      const newMsg = {...oldMsg, reaction: emoji};
+      try {
+        await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayRemove(oldMsg) });
+        await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(newMsg) });
+      } catch(e){}
+    }
+  },
+
+  // Novo Fluxo de Entrega de Carga/Produto
+  async notifyShipped() {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const tx = this.localDB.transactions.find(t => t.id === chat?.txId);
+    if(!tx) return;
+    UI.confirm("Avisar Envio", "Confirmar que você j enviou/entregou o produto para o cliente?", async ok => {
+      if(!ok) return;
+      try {
+        await db.collection('transactions').doc(tx.id).update({ status: 'Enviado' });
+        const m1 = { id:'m1_'+Date.now(), sender:this.currentUser.uid, type:'text', content:'?? O pedido foi marcado como enviado! Aguardando confirmao do comprador.', time:Date.now() };
+        await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(m1), lastMessage: m1 });
+        document.getElementById('btn-send-product').style.display = 'none';
+        UI.toast("Envio notificado!", "info");
+      } catch(e) { UI.toast("Erro ao notificar envio", "error"); }
+    });
+  },
+
+  async confirmReceipt() {
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    const tx = this.localDB.transactions.find(t => t.id === chat?.txId);
+    if(!tx) return;
+    UI.confirm("Confirmar Recebimento", "Voc confirma que recebeu o produto? O valor ser liberado para o vendedor.", async ok => {
+      if(!ok) return;
+      try {
+        await db.collection('transactions').doc(tx.id).update({ status: 'Concludo' });
+        await db.collection('users').doc(tx.sellerId).update({ 
+          balance: firebase.firestore.FieldValue.increment(tx.amount), 
+          sales: firebase.firestore.FieldValue.increment(1) 
+        });
+        const m1 = { id:'m1_'+Date.now(), sender:this.currentUser.uid, type:'text', content:'? Recebimento confirmado! Dinheiro liberado para o vendedor. Obrigado!', time:Date.now() };
+        const m2 = { id:'m2_'+Date.now(), sender:'system', type:'text', content:'?? Pagamento creditado na conta do vendedor com sucesso.', time:Date.now()+1 };
+        await db.collection('chats').doc(this.activeChatId).update({ messages: firebase.firestore.FieldValue.arrayUnion(m1, m2), lastMessage: m2 });
+        document.getElementById('btn-confirm-receipt').style.display = 'none';
+        UI.toast("Compra concluda com sucesso!", "success");
+      } catch(e) { UI.toast("Erro ao confirmar", "error"); }
+    });
+  },
+
+  /* ====== AUDIO PLAYER ====== */
+  playAudio(msgId, base64, duration) {
+    const playBtn = document.querySelector(`[data-audioid="${msgId}"] .audio-play-btn`);
+    const bars = document.querySelectorAll(`[data-audioid="${msgId}"] .audio-bar`);
+    const durationEl = document.querySelector(`[data-audioid="${msgId}"] .audio-duration`);
+
+    if(this._currentAudio) {
+      this._currentAudio.pause();
+      this._currentAudio = null;
+      if(this._audioAnimFrame) cancelAnimationFrame(this._audioAnimFrame);
+    }
+
+    const audio = new Audio(base64);
+    this._currentAudio = audio;
+
+    if(playBtn) playBtn.innerHTML = '<i class="fas fa-pause"></i>';
+
+    let elapsed = 0;
+    const totalDuration = duration || 1;
+    const startTime = Date.now();
+
+    const animate = () => {
+      elapsed = (Date.now() - startTime) / 1000;
+      const progress = Math.min(elapsed / totalDuration, 1);
+      const activeBar = Math.floor(progress * bars.length);
+      bars.forEach((b, i) => b.classList.toggle('active', i <= activeBar));
+      const remaining = Math.max(0, totalDuration - elapsed);
+      if(durationEl) {
+        const m = Math.floor(remaining/60);
+        const s = Math.floor(remaining%60);
+        durationEl.innerText = `${m}:${s.toString().padStart(2,'0')}`;
+      }
+      if(elapsed < totalDuration && !audio.ended) { this._audioAnimFrame = requestAnimationFrame(animate); } 
+      else {
+        if(playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
+        bars.forEach(b => b.classList.remove('active'));
+        if(durationEl) {
+          const m = Math.floor(totalDuration/60);
+          const s = Math.floor(totalDuration%60);
+          durationEl.innerText = `${m}:${s.toString().padStart(2,'0')}`;
+        }
+      }
+    };
+
+    audio.play().then(() => { this._audioAnimFrame = requestAnimationFrame(animate); }).catch(() => { UI.toast("Erro ao reproduzir udio.", "error"); });
+    audio.onended = () => {
+      if(playBtn) playBtn.innerHTML = '<i class="fas fa-play"></i>';
+      bars.forEach(b => b.classList.remove('active'));
+      this._currentAudio = null;
+    };
+  },
+
+  /* ====== UI UPDATES ====== */
+  updateGlobalUI() {
+    if(!this.userData) return;
+    const u = this.userData;
+    document.getElementById('sidebar-name').innerText = u.name;
+    document.getElementById('header-balance').innerText = `Db ${(u.balance||0).toFixed(2)}`;
+    this.setAvatar('sidebar-avatar', u.avatar, u.name);
+    this.setAvatar('header-avatar', u.avatar, u.name);
+    document.getElementById('set-name').value = u.name;
+    document.getElementById('set-bio').value = u.bio || '';
+    document.getElementById('set-private').checked = u.isPrivate === true;
+    if(u.avatar) {
+      document.getElementById('settings-avatar-preview-box').style.backgroundImage = `url('${u.avatar}')`;
+      document.getElementById('settings-avatar-preview-box').innerHTML = '';
+    }
+  },
+
+  setAvatar(id, base64, name) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    if(base64) { el.style.backgroundImage = `url('${base64}')`; el.innerText = ''; }
+    else { el.style.backgroundImage = 'none'; el.innerText = name ? name.charAt(0).toUpperCase() : 'U'; }
+  },
+
+  switchView(viewId) {
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    const nav = document.querySelector(`.nav-item[data-target="${viewId}"]`);
+    if(nav) nav.classList.add('active');
+    if(viewId === 'view-chat') document.getElementById('global-nav-dot').style.display = 'none';
+    const titles = {
+      'view-dashboard':{ t:'Dashboard Central', s:'Visão geral das suas operações.' },
+      'view-marketplace':{ t:'Marketplace', s:'Explore criaes e produtos da rede.' },
+      'view-ranking':{ t:'Ranking Global', s:'Elite do sistema.' },
+      'view-profile':{ t:'Perfil', s:'Sua vitrine pblica.' },
+      'view-create-product':{ t:'Lanar Produto', s:'Adicione valor e fature.' },
+      'view-chat':{ t:'Transmissões', s:'Comunicao em tempo real.' },
+      'view-settings':{ t:'Configurações', s:'Gerenciamento da conta.' }
+    };
+    document.getElementById('current-view-title').innerText = titles[viewId]?.t || '';
+    document.getElementById('current-view-subtitle').innerText = titles[viewId]?.s || '';
+    document.querySelectorAll('.view-section').forEach(el => el.classList.remove('active'));
+    document.getElementById(viewId).classList.add('active');
+    if(viewId==='view-dashboard') this.renderDashboard();
+    if(viewId==='view-marketplace') this.renderMarketplace();
+    if(viewId==='view-profile') this.renderProfile();
+    if(viewId==='view-ranking') this.renderRanking();
+    if(viewId==='view-chat') { document.getElementById('chat-empty-state').style.display='flex'; document.getElementById('chat-active-state').style.display='none'; this.renderChatList(); }
+  },
+
+  viewUserProfile(userId) {
+    this.viewingProfileId = userId;
+    this.switchView('view-profile');
+  },
+
+  /* ====== CHAT RENDER ====== */
+  renderChatList() {
+    const cList = document.getElementById('chat-list-container');
+    cList.innerHTML = '';
+    const sorted = [...this.localDB.chats].sort((a,b) => (b.lastMessage?.time||0) - (a.lastMessage?.time||0));
+    sorted.forEach(c => {
+      const otherId = c.participants.find(pid => pid !== this.currentUser.uid);
+      const otherU = this.localDB.users.find(u => u.id === otherId) || { name:'Desconhecido', avatar:null };
+      const lastMsg = c.lastMessage;
+      const lastText = lastMsg ? (lastMsg.type==='image' ? '?? Imagem' : lastMsg.type==='audio' ? '?? udio' : lastMsg.content) : "Nova conversa";
+      const hasUnread = lastMsg && lastMsg.sender !== this.currentUser.uid && lastMsg.sender !== 'system';
+      const div = document.createElement('div');
+      div.className = `chat-contact ${c.id===this.activeChatId?'active':''}`;
+      div.innerHTML = `
+        <div class="chat-contact-avatar">
+          <div class="avatar" style="width:48px;height:48px;border:none;${otherU.avatar?`background-image:url('${otherU.avatar}')`:''}">${otherU.avatar?'':otherU.name.charAt(0)}</div>
+          ${hasUnread?'<div class="notification-dot" style="display:block;top:-2px;right:-2px;"></div>':''}
+        </div>
+        <div style="overflow:hidden;flex:1;">
+          <strong style="color:var(--text-main);display:block;font-size:0.95rem;margin-bottom:2px;">${otherU.name}</strong>
+          <small style="color:${hasUnread?'white':'var(--text-muted)'};display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:${hasUnread?'600':'400'};font-size:0.82rem;">${lastText.length>40?lastText.substring(0,40)+'...':lastText}</small>
+        </div>
+        ${lastMsg?.time?`<small style="color:var(--text-muted);font-size:0.7rem;align-self:flex-start;white-space:nowrap;">${new Date(lastMsg.time).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</small>`:''}`;
+      div.onclick = () => this.openChat(c.id);
+      cList.appendChild(div);
+    });
+  },
+
+  openChat(cId) {
+    this.activeChatId = cId;
+    this.cancelEdit();
+    this.cancelReply();
+    document.getElementById('chat-empty-state').style.display = 'none';
+    document.getElementById('chat-active-state').style.display = 'flex';
+    this.renderChatList();
+    const chat = this.localDB.chats.find(c => c.id === cId);
+    const otherId = chat?.participants?.find(pid => pid !== this.currentUser.uid);
+    const otherU = this.localDB.users.find(u => u.id === otherId) || { name:'Deletado', avatar:null };
+    document.getElementById('chat-active-name').innerText = otherU.name;
+    this.setAvatar('chat-active-avatar', otherU.avatar, otherU.name);
+    
+    const tx = this.localDB.transactions.find(t => t.id === chat?.txId);
+    if(tx) {
+      const badge = document.getElementById('chat-tx-status');
+      badge.style.display = 'block';
+      badge.innerText = tx.status;
+      badge.style.background = tx.status==='Concludo' ? 'rgba(16,185,129,0.2)' : 'rgba(245,158,11,0.2)';
+      badge.style.color = tx.status==='Concludo' ? 'var(--success)' : 'var(--warning)';
+      
+      const isSeller = tx.sellerId === this.currentUser.uid;
+      const isBuyer = tx.buyerId === this.currentUser.uid;
+      
+      document.getElementById('btn-send-product').style.display = (isSeller && tx.status === 'Pendente Pagamento') ? 'flex' : 'none';
+      document.getElementById('btn-confirm-receipt').style.display = (isBuyer && tx.status === 'Enviado') ? 'flex' : 'none';
+    } else {
+      document.getElementById('chat-tx-status').style.display = 'none';
+      document.getElementById('btn-send-product').style.display = 'none';
+      document.getElementById('btn-confirm-receipt').style.display = 'none';
+    }
+    this.renderChatMessages(true);
+    this.toggleSendMic();
+  },
+
+  renderChatMessages(scrollForce=false) {
+    const container = document.getElementById('chat-messages-container');
+    const inner = document.getElementById('chat-messages-inner');
+    const wasAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 60;
+    inner.innerHTML = '';
+    const chat = this.localDB.chats.find(c => c.id === this.activeChatId);
+    if(!chat?.messages) return;
+
+    const msgs = [...chat.messages].sort((a,b) => (a.time||0)-(b.time||0));
+    let lastTime = null;
+
+    msgs.forEach((m, i) => {
+      const isMine = m.sender === this.currentUser.uid;
+      const isSystem = m.sender === 'system';
+      const isNextSame = msgs[i+1] && msgs[i+1].sender === m.sender;
+
+      // Time separator
+      if(m.time && (!lastTime || m.time - lastTime > 10*60*1000)) {
+        const sep = document.createElement('div');
+        sep.className = 'msg-time-label';
+        sep.innerText = new Date(m.time).toLocaleString('pt-BR',{hour:'2-digit',minute:'2-digit',day:'2-digit',month:'short'});
+        inner.appendChild(sep);
+      }
+      lastTime = m.time;
+
+      if(isSystem) {
+        const row = document.createElement('div');
+        row.className = 'msg-row system-row';
+        const bub = document.createElement('div');
+        bub.className = 'msg-bubble system-bubble';
+        bub.innerText = m.content;
+        row.appendChild(bub);
+        inner.appendChild(row);
+        return;
+      }
+
+      const row = document.createElement('div');
+      row.className = `msg-row ${isMine?'mine':''}`;
+
+      // Avatar for other user (last in group)
+      if(!isMine) {
+        const otherU = this.localDB.users.find(u => u.id === m.sender) || { name:'?', avatar:null };
+        const av = document.createElement('div');
+        av.className = `msg-avatar-small ${isNextSame?'hidden':''}`;
+        if(otherU.avatar) av.style.backgroundImage = `url('${otherU.avatar}')`;
+        else av.innerText = otherU.name.charAt(0);
+        row.appendChild(av);
+      }
+
+      const bub = document.createElement('div');
+      bub.className = `msg-bubble ${isMine?'sent':'received'}${m.deleted?' deleted':''}${m.edited&&!m.deleted?' edited':''}`;
+      if(!isNextSame) bub.classList.add('tail');
+      bub.setAttribute('data-msgid', m.id);
+
+      // Reply preview
+      if(m.replyTo && !m.deleted) {
+        const replyU = this.localDB.users.find(u => u.id === m.replyTo.sender);
+        const replyName = m.replyTo.sender === this.currentUser.uid ? 'Voc' : (replyU?.name || '');
+        const replyDiv = document.createElement('div');
+        replyDiv.style.cssText = `background:rgba(0,0,0,0.25);border-left:3px solid rgba(255,255,255,0.4);border-radius:6px;padding:5px 10px;margin-bottom:6px;font-size:0.78rem;max-width:100%;overflow:hidden;`;
+        replyDiv.innerHTML = `<strong style="display:block;margin-bottom:2px;opacity:0.9;">${replyName}</strong><span style="opacity:0.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">${m.replyTo.content?.substring(0,60)||'Mensagem'}</span>`;
+        bub.appendChild(replyDiv);
+      }
+
+      // Content
+      if(m.deleted) {
+        bub.innerHTML += `<span style="font-style:italic;opacity:0.5;font-size:0.85rem;">?? Mensagem eliminada</span>`;
+      } else if(m.type==='image') {
+        const img = document.createElement('img');
+        img.src = m.content;
+        img.style.cssText = 'max-width:100%;border-radius:10px;display:block;';
+        img.alt = 'img';
+        bub.appendChild(img);
+      } else if(m.type==='audio') {
+        const audioDur = m.duration || 0;
+        const durStr = `${Math.floor(audioDur/60)}:${(audioDur%60).toString().padStart(2,'0')}`;
+        const audioDiv = document.createElement('div');
+        audioDiv.className = 'audio-msg';
+        audioDiv.setAttribute('data-audioid', m.id);
+
+        // Generate pseudo-waveform bars
+        const numBars = 24;
+        const heights = Array.from({length:numBars}, () => Math.random()*16+6);
+        const waveHtml = heights.map(h => `<div class="audio-bar" style="height:${h}px;"></div>`).join('');
+
+        audioDiv.innerHTML = `
+          <button class="audio-play-btn" onclick="event.stopPropagation();app.playAudio('${m.id}','${m.content}',${audioDur})">
+            <i class="fas fa-play"></i>
+          </button>
+          <div class="audio-waveform" style="color:${isMine?'rgba(255,255,255,0.7)':'rgba(59,130,246,0.7)'};">${waveHtml}</div>
+          <span class="audio-duration">${durStr}</span>`;
+        bub.appendChild(audioDiv);
+      } else {
+        bub.appendChild(document.createTextNode(m.content));
+      }
+
+      // Timestamp + edited badge
+      const timeSpan = document.createElement('span');
+      timeSpan.style.cssText = `font-size:0.68rem;opacity:0.45;display:block;text-align:right;margin-top:4px;`;
+      timeSpan.innerText = m.time ? new Date(m.time).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+      if(m.edited && !m.deleted) {
+        const editedLabel = document.createElement('span');
+        editedLabel.style.cssText = 'font-size:0.65rem;opacity:0.4;margin-right:4px;';
+        editedLabel.innerText = 'editada  ';
+        timeSpan.prepend(editedLabel);
+      }
+      bub.appendChild(timeSpan);
+
+      // Reaction
+      if(m.reaction && !m.deleted) {
+        const rea = document.createElement('span');
+        rea.className = `msg-reactions ${isMine?'msg-reaction-mine':''}`;
+        rea.innerText = m.reaction;
+        bub.appendChild(rea);
+      }
+
+      // Context menu
+      bub.addEventListener('contextmenu', e => { e.preventDefault(); this.openMsgMenu(e, m.id, isMine, m.type, m.deleted); });
+      let lastTap = 0;
+      bub.addEventListener('touchend', e => {
+        const now = Date.now();
+        if(now - lastTap < 300) this.openMsgMenu(e.changedTouches[0], m.id, isMine, m.type, m.deleted);
+        lastTap = now;
+      });
+
+      row.appendChild(bub);
+      if(!isNextSame) row.style.marginBottom = '6px';
+      inner.appendChild(row);
+    });
+
+    if(scrollForce || wasAtBottom) { requestAnimationFrame(() => { container.scrollTop = container.scrollHeight; }); }
+  },
+
+  openMsgMenu(event, msgId, isMine, msgType, isDeleted) {
+    event.stopPropagation && event.stopPropagation();
+    this.contextMessageId = msgId;
+    const menu = document.getElementById('msg-context-menu');
+    document.getElementById('ctx-edit').style.display = (isMine && msgType==='text' && !isDeleted) ? 'flex' : 'none';
+    document.getElementById('ctx-delete').style.display = (!isDeleted && isMine) ? 'flex' : 'none';
+    document.getElementById('ctx-reply').style.display = isDeleted ? 'none' : 'flex';
+    menu.style.display = 'block';
+    const x = Math.min(event.clientX || event.pageX, window.innerWidth - 210);
+    const y = Math.min(event.clientY || event.pageY, window.innerHeight - 200);
+    menu.style.top = y + 'px';
+    menu.style.left = x + 'px';
+  },
+
+  renderMarketplace(filter='all', search='') {
+    const grid = document.getElementById('marketplace-grid');
+    grid.innerHTML = '';
+    let items = [...this.localDB.products];
+    if(filter !== 'all') items = items.filter(p => p.category === filter);
+    if(search) items = items.filter(p => p.title.toLowerCase().includes(search.toLowerCase()) || (p.desc||'').toLowerCase().includes(search.toLowerCase()));
+    if(items.length === 0) {
+      grid.innerHTML = `<div style="grid-column:1/-1;text-align:center;padding:4rem 0;"><i class="fas fa-box-open" style="font-size:3rem;color:var(--text-muted);margin-bottom:1rem;display:block;"></i><h3 style="color:var(--text-muted);">Nenhum ativo encontrado.</h3></div>`;
+      return;
+    }
+    [...items].reverse().forEach(p => {
+      const seller = this.localDB.users.find(u => u.id === p.sellerId) || { name:'Desconhecido', avatar:null };
+      const isMine = p.sellerId === this.currentUser?.uid;
+      const alreadyAffiliated = (this.userData?.affiliatedProducts||[]).includes(p.id);
+      const affEnabled = p.affiliateEnabled !== false;
+      const commission = p.affiliateCommission || 20;
+      const images = p.images || (p.image ? [p.image] : []);
+      const avgRating = p.ratingCount > 0 ? (p.ratingSum / p.ratingCount) : 0;
+      const stars = this.buildStarDisplay(avgRating, p.ratingCount);
+
+      const actionBtn = isMine
+        ? `<button class="btn btn-secondary" style="width:100%;" onclick="event.stopPropagation();app.viewUserProfile('${this.currentUser.uid}')"><i class="fas fa-eye"></i> Meu Produto</button>`
+        : `<button class="btn btn-primary" style="width:100%;" onclick="event.stopPropagation();app.buyProduct('${p.id}')"><i class="fas fa-shopping-cart"></i> Adquirir</button>`;
+
+      let affiliateBtn = '';
+      if(isMine) {
+        affiliateBtn = `<button class="btn" style="width:100%;background:rgba(139,92,246,0.1);color:var(--accent);border-color:rgba(139,92,246,0.25);" onclick="event.stopPropagation();app.openAffSettings('${p.id}')"><i class="fas fa-sliders-h"></i> Gerir Afiliados${affEnabled?' ('+commission+'%)':' (off)'}</button>`;
+      } else if(!affEnabled) {
+        affiliateBtn = `<button class="btn" style="width:100%;background:rgba(255,255,255,0.03);color:var(--text-muted);border-color:rgba(255,255,255,0.08);cursor:default;" disabled><i class="fas fa-ban"></i> Sem afiliados</button>`;
+      } else if(alreadyAffiliated) {
+        affiliateBtn = `<button class="btn" style="width:100%;background:rgba(139,92,246,0.15);color:var(--accent);border-color:rgba(139,92,246,0.3);cursor:default;"><i class="fas fa-check"></i> Afiliado (${commission}%)</button>`;
+      } else {
+        affiliateBtn = `<button class="btn" style="width:100%;background:rgba(139,92,246,0.1);color:var(--accent);border-color:rgba(139,92,246,0.25);" onclick="event.stopPropagation();app.openAffiliateModal('${p.id}')"><i class="fas fa-handshake"></i> Afiliar (${commission}%)</button>`;
+      }
+
+      const deleteBtn = isMine ? `<button class="btn-delete-prod" title="Eliminar produto" onclick="event.stopPropagation();app.deleteProduct('${p.id}')"><i class="fas fa-trash"></i></button>` : '';
+
+      // Mini carousel dots for multi-image
+      const hasMulti = images.length > 1;
+
+      const card = document.createElement('div');
+      card.className = 'card product-card';
+      card.style.cursor = 'pointer';
+      card.onclick = () => this.openProductDetail(p.id);
+      card.innerHTML = `
+        <div class="product-img-wrap product-img" style="background-image:url('${images[0]||''}');" data-imgs='${JSON.stringify(images)}' data-idx="0">
+          <span class="product-badge">${p.category}</span>
+          ${deleteBtn}
+          ${hasMulti ? `<button class="carousel-btn prev" onclick="event.stopPropagation();app.miniCarouselNav(this.closest('.product-img-wrap'),-1)"><i class="fas fa-chevron-left"></i></button>
+          <button class="carousel-btn next" onclick="event.stopPropagation();app.miniCarouselNav(this.closest('.product-img-wrap'),1)"><i class="fas fa-chevron-right"></i></button>
+          <div class="carousel-dots">${images.map((_,i)=>`<button class="carousel-dot ${i===0?'active':''}" onclick="event.stopPropagation();app.miniCarouselGo(this.closest('.product-img-wrap'),${i})"></button>`).join('')}</div>` : ''}
+        </div>
+        <div class="product-content">
+          <div class="product-seller" onclick="event.stopPropagation();app.viewUserProfile('${p.sellerId}')">
+            <div class="seller-avatar" style="${seller.avatar?`background-image:url('${seller.avatar}')`:''}">${seller.avatar?'':seller.name.charAt(0)}</div>
+            <span>${seller.name}</span>
+          </div>
+          <h3 class="product-title">${p.title}</h3>
+          <div style="display:flex;align-items:center;gap:4px;margin-bottom:6px;">${stars}</div>
+          <p class="product-desc">${(p.desc||'').substring(0,120)}${p.desc&&p.desc.length>120?'...':''}</p>
+          <div class="product-footer">
+            <div class="product-price"><span>Db</span> ${p.price.toFixed(2)}</div>
+            ${actionBtn}
+            ${affiliateBtn}
+          </div>
+        </div>`;
+      grid.appendChild(card);
+    });
+  },
+
+  miniCarouselNav(wrap, dir) {
+    const imgs = JSON.parse(wrap.dataset.imgs || '[]');
+    let idx = parseInt(wrap.dataset.idx || '0');
+    idx = (idx + dir + imgs.length) % imgs.length;
+    wrap.dataset.idx = idx;
+    wrap.style.backgroundImage = `url('${imgs[idx]}')`;
+    wrap.querySelectorAll('.carousel-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+  },
+
+  miniCarouselGo(wrap, idx) {
+    const imgs = JSON.parse(wrap.dataset.imgs || '[]');
+    wrap.dataset.idx = idx;
+    wrap.style.backgroundImage = `url('${imgs[idx]}')`;
+    wrap.querySelectorAll('.carousel-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+  },
+
+  buildStarDisplay(avg, count) {
+    let html = '<div class="star-display">';
+    for(let i=1;i<=5;i++) html += `<span class="star${i<=Math.round(avg)?'':' empty'}">★</span>`;
+    html += `</div><span class="rating-count">${count>0?avg.toFixed(1)+' ('+count+')'  :'Sem avaliações'}</span>`;
+    return html;
+  },
+
+  async deleteProduct(pId) {
+    UI.confirm("Eliminar Produto", "Tem a certeza que deseja eliminar este produto permanentemente?", async ok => {
+      if(!ok) return;
+      try {
+        await db.collection('products').doc(pId).delete();
+        UI.toast("Produto eliminado com sucesso!", "success");
+      } catch(e) { UI.toast("Erro ao eliminar o produto.", "error"); }
+    });
+  },
+
+  /* ====== PRODUCT DETAIL ====== */
+  async openProductDetail(pId) {
+    const p = this.localDB.products.find(x => x.id === pId);
+    if(!p) return;
+    this._detailProductId = pId;
+    this._detailCarouselIdx = 0;
+    const seller = this.localDB.users.find(u => u.id === p.sellerId) || { name:'Desconhecido', avatar:null };
+    const isMine = p.sellerId === this.currentUser?.uid;
+    const images = p.images || (p.image ? [p.image] : []);
+    const avgRating = p.ratingCount > 0 ? (p.ratingSum / p.ratingCount) : 0;
+
+    // Build carousel
+    const track = document.getElementById('pd-carousel-track');
+    track.innerHTML = '';
+    images.forEach(img => {
+      const slide = document.createElement('div');
+      slide.className = 'carousel-slide';
+      slide.style.backgroundImage = `url('${img}')`;
+      track.appendChild(slide);
+    });
+    track.style.transform = 'translateX(0)';
+
+    // Dots
+    const dotsEl = document.getElementById('pd-dots');
+    dotsEl.innerHTML = images.map((_,i) => `<button class="carousel-dot ${i===0?'active':''}" onclick="app.carouselGoTo(${i})"></button>`).join('');
+    document.getElementById('pd-prev').style.display = images.length > 1 ? 'flex' : 'none';
+    document.getElementById('pd-next').style.display = images.length > 1 ? 'flex' : 'none';
+
+    // Info
+    document.getElementById('pd-badge').innerText = p.category;
+    document.getElementById('pd-title').innerText = p.title;
+    document.getElementById('pd-desc').innerText = p.desc || '';
+    document.getElementById('pd-price').innerHTML = `<span>Db</span> ${p.price.toFixed(2)}`;
+    document.getElementById('pd-stars').innerHTML = '';
+    for(let i=1;i<=5;i++) {
+      const s = document.createElement('span');
+      s.className = 'star' + (i <= Math.round(avgRating) ? '' : ' empty');
+      s.innerText = '★';
+      document.getElementById('pd-stars').appendChild(s);
+    }
+    document.getElementById('pd-rating-text').innerText = p.ratingCount > 0 ? `${avgRating.toFixed(1)} de 5 (${p.ratingCount} avaliações)` : 'Sem avaliações ainda';
+
+    document.getElementById('pd-seller').innerHTML = `<div class="seller-avatar" style="${seller.avatar?`background-image:url('${seller.avatar}')`:''}">${seller.avatar?'':seller.name.charAt(0)}</div><span>por <strong style="color:var(--text-main);">${seller.name}</strong></span>`;
+
+    // Action buttons
+    const actEl = document.getElementById('pd-action-btns');
+    if(isMine) {
+      actEl.innerHTML = `<button class="btn btn-secondary" style="width:100%;" onclick="app.viewUserProfile('${this.currentUser.uid}')"><i class="fas fa-eye"></i> Meu Produto</button>
+        <button class="btn btn-danger" style="width:100%;" onclick="app.deleteProduct('${p.id}');app.closeProductDetail()"><i class="fas fa-trash"></i> Eliminar</button>`;
+    } else {
+      actEl.innerHTML = `<button class="btn btn-primary" style="width:100%;" onclick="app.closeProductDetail();app.buyProduct('${p.id}')"><i class="fas fa-shopping-cart"></i> Adquirir agora</button>`;
+    }
+
+    // Review form: hide for own products
+    document.getElementById('pd-review-form').style.display = isMine ? 'none' : 'block';
+    this._reviewRating = 0;
+    document.querySelectorAll('#review-stars .star').forEach(s => s.classList.remove('active'));
+    document.getElementById('review-rating-label').innerText = 'Sem classificação';
+    document.getElementById('review-text').value = '';
+
+    document.getElementById('prod-detail-overlay').classList.add('active');
+    this.loadProductComments(pId);
+  },
+
+  closeProductDetail() {
+    document.getElementById('prod-detail-overlay').classList.remove('active');
+    this._detailProductId = null;
+  },
+
+  carouselNav(dir) {
+    const p = this.localDB.products.find(x => x.id === this._detailProductId);
+    const images = p?.images || (p?.image ? [p.image] : []);
+    this._detailCarouselIdx = (this._detailCarouselIdx + dir + images.length) % images.length;
+    this.carouselGoTo(this._detailCarouselIdx);
+  },
+
+  carouselGoTo(idx) {
+    const p = this.localDB.products.find(x => x.id === this._detailProductId);
+    const images = p?.images || (p?.image ? [p.image] : []);
+    this._detailCarouselIdx = idx;
+    document.getElementById('pd-carousel-track').style.transform = `translateX(-${idx * 100}%)`;
+    document.querySelectorAll('#pd-dots .carousel-dot').forEach((d,i) => d.classList.toggle('active', i === idx));
+  },
+
+  async loadProductComments(pId) {
+    const list = document.getElementById('pd-comments-list');
+    list.innerHTML = '<p style="color:var(--text-muted);font-size:.85rem;text-align:center;padding:1rem;">A carregar...</p>';
+    try {
+      const snap = await db.collection('productReviews').where('productId','==',pId).orderBy('createdAt','desc').limit(20).get();
+      const reviews = snap.docs.map(d => ({id: d.id, ...d.data()}));
+      document.getElementById('pd-comment-count').innerText = reviews.length;
+      if(reviews.length === 0) { list.innerHTML = '<p style="color:var(--text-muted);font-size:.88rem;text-align:center;padding:1rem;">Seja o primeiro a avaliar este produto!</p>'; return; }
+      list.innerHTML = '';
+      reviews.forEach(r => {
+        const user = this.localDB.users.find(u => u.id === r.userId) || { name:'Utilizador', avatar:null };
+        let starsHtml = '';
+        for(let i=1;i<=5;i++) starsHtml += `<span class="star${i<=r.rating?'':' empty'}" style="font-size:.8rem;">★</span>`;
+        list.insertAdjacentHTML('beforeend', `
+          <div class="comment-item">
+            <div class="avatar" style="width:36px;height:36px;font-size:.85rem;flex-shrink:0;${user.avatar?`background-image:url('${user.avatar}')`:''}">${user.avatar?'':user.name.charAt(0)}</div>
+            <div class="comment-body">
+              <div style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;">
+                <strong>${user.name}</strong>
+                <div class="star-display">${starsHtml}</div>
+              </div>
+              ${r.text ? `<p class="comment-text">${r.text}</p>` : ''}
+              <div class="comment-time">${r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'}) : ''}</div>
+            </div>
+          </div>`);
+      });
+    } catch(e) { list.innerHTML = '<p style="color:var(--danger);font-size:.85rem;text-align:center;">Erro ao carregar avaliações.</p>'; }
+  },
+
+  setReviewRating(val) {
+    this._reviewRating = val;
+    const labels = ['','Fraco','Razoável','Bom','Muito bom','Excelente!'];
+    document.getElementById('review-rating-label').innerText = labels[val] || '';
+    document.querySelectorAll('#review-stars .star').forEach(s => {
+      const v = parseInt(s.dataset.v);
+      s.classList.toggle('active', v <= val);
+    });
+  },
+
+  async submitReview() {
+    const pId = this._detailProductId;
+    if(!pId) return;
+    if(this._reviewRating === 0) { UI.toast("Selecione uma classificação!", "error"); return; }
+    const text = document.getElementById('review-text').value.trim();
+    try {
+      // Check if already reviewed
+      const existing = await db.collection('productReviews').where('productId','==',pId).where('userId','==',this.currentUser.uid).get();
+      if(!existing.empty) { UI.toast("Já avaliou este produto!", "info"); return; }
+      await db.collection('productReviews').add({
+        productId: pId, userId: this.currentUser.uid,
+        rating: this._reviewRating, text, createdAt: Date.now()
+      });
+      await db.collection('products').doc(pId).update({
+        ratingSum: firebase.firestore.FieldValue.increment(this._reviewRating),
+        ratingCount: firebase.firestore.FieldValue.increment(1)
+      });
+      document.getElementById('review-text').value = '';
+      this._reviewRating = 0;
+      document.querySelectorAll('#review-stars .star').forEach(s => s.classList.remove('active'));
+      document.getElementById('review-rating-label').innerText = 'Sem classificação';
+      UI.toast("Avaliação publicada!", "success");
+      this.loadProductComments(pId);
+    } catch(e) { UI.toast("Erro ao publicar avaliação.", "error"); }
+  },
+
+  renderProductImagePreviews() {
+    const grid = document.getElementById('prod-multi-img-grid');
+    if(this.tempProductImages.length === 0) { grid.style.display = 'none'; return; }
+    grid.style.display = 'grid';
+    grid.innerHTML = '';
+    this.tempProductImages.forEach((b64, i) => {
+      const thumb = document.createElement('div');
+      thumb.className = 'multi-img-thumb';
+      thumb.innerHTML = `<img src="${b64}" alt="foto ${i+1}"><button class="remove-img" onclick="app.removeProductImage(${i})"><i class="fas fa-times"></i></button>`;
+      grid.appendChild(thumb);
+    });
+    if(this.tempProductImages.length < 6) {
+      const addBtn = document.createElement('div');
+      addBtn.className = 'add-more-img';
+      addBtn.onclick = () => document.getElementById('prod-image-file').click();
+      addBtn.innerHTML = '<i class="fas fa-plus" style="font-size:1.2rem;"></i><span>Adicionar</span>';
+      grid.appendChild(addBtn);
+    }
+  },
+
+  removeProductImage(idx) {
+    this.tempProductImages.splice(idx, 1);
+    this.renderProductImagePreviews();
+  },
+
+  renderDashboard() {
+    if(!this.userData) return;
+    const mySalesTxs = this.localDB.transactions.filter(t => t.sellerId===this.currentUser.uid && t.status==='Concludo');
+    const revenue = mySalesTxs.reduce((a,c) => a+c.amount, 0);
+    document.getElementById('dash-revenue').innerHTML = `<span>Db</span> ${revenue.toFixed(2)}`;
+    document.getElementById('dash-sales-count').innerText = this.userData.sales || 0;
+    document.getElementById('dash-products-count').innerText = this.localDB.products.filter(p => p.sellerId===this.currentUser.uid).length;
+    const tbody = document.getElementById('transactions-list-mini');
+    tbody.innerHTML = '';
+    [...this.localDB.transactions].reverse().slice(0,8).forEach(t => {
+      const isSale = t.sellerId === this.currentUser.uid;
+      const c = isSale ? 'var(--success)' : 'var(--danger)';
+      tbody.insertAdjacentHTML('beforeend', `<tr>
+        <td style="color:var(--text-main);font-weight:600;">${t.pTitle}</td>
+        <td><i class="fas ${isSale?'fa-arrow-up':'fa-arrow-down'}" style="color:${c};"></i></td>
+        <td><span class="badge" style="background:${t.status==='Concludo'?'rgba(16,185,129,0.15)':'rgba(245,158,11,0.15)'};color:${t.status==='Concludo'?'var(--success)':'var(--warning)'};">${t.status}</span></td>
+        <td style="text-align:right;font-weight:bold;color:${c};">Db ${t.amount.toFixed(2)}</td>
+      </tr>`);
+    });
+    this.initChart(mySalesTxs);
+  },
+
+  initChart(sales) {
+    const ctx = document.getElementById('financeChart').getContext('2d');
+    if(this.chartInstance) this.chartInstance.destroy();
+    const dp = [0,0,0,0,0,0];
+    sales.forEach((s,i) => { dp[Math.min(5, i)] += s.amount; });
+    this.chartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['-5','-4','-3','-2','-1','Atual'],
+        datasets: [{
+          label: 'Db', data: dp,
+          borderColor: '#3b82f6',
+          backgroundColor: (ctx) => {
+            const g = ctx.chart.ctx.createLinearGradient(0,0,0,300);
+            g.addColorStop(0,'rgba(59,130,246,0.4)');
+            g.addColorStop(1,'rgba(59,130,246,0.0)');
+            return g;
+          },
+          borderWidth: 2.5, fill: true, tension: 0.45,
+          pointBackgroundColor: '#3b82f6', pointRadius: 4, pointHoverRadius: 6
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)' } },
+          y: { grid: { color: 'rgba(255,255,255,0.04)' }, ticks: { color: 'rgba(255,255,255,0.4)' } }
+        }
+      }
+    });
+  },
+
+  renderRanking() {
+    const rList = document.getElementById('ranking-list');
+    rList.innerHTML = '';
+    // Mostra todos ordenados por balano (Sem limite)
+    const sorted = [...this.localDB.users].sort((a,b) => (b.balance||0)-(a.balance||0));
+    sorted.forEach((u,i) => {
+      const pClass = i===0?'gold':i===1?'silver':i===2?'bronze':'';
+      rList.insertAdjacentHTML('beforeend', `
+        <div class="ranking-item" onclick="app.viewUserProfile('${u.id}')">
+          <div class="ranking-pos ${pClass}">${i+1}</div>
+          <div class="ranking-user-info">
+            <div class="avatar" style="width:50px;height:50px;${u.avatar?`background-image:url('${u.avatar}')`:''}">${u.avatar?'':u.name.charAt(0)}</div>
+            <div>
+              <h3 style="font-size:1.1rem;">${u.name} ${i===0?'<i class="fas fa-star" style="color:#FBBF24;font-size:0.9rem;"></i>':''}</h3>
+              <small style="color:var(--text-muted);">${(u.followers||[]).length} seguidores  ${u.sales||0} vendas</small>
+            </div>
+          </div>
+          <div class="ranking-profit"><h2>Db ${(u.balance||0).toFixed(2)}</h2></div>
+        </div>`);
+    });
+  },
+
+  renderProfile() {
+    const pid = this.viewingProfileId || this.currentUser.uid;
+    const u = this.localDB.users.find(x => x.id === pid);
+    if(!u) { this.switchView('view-dashboard'); return; }
+    
+    const isMine = u.id === this.currentUser.uid;
+    const isFollowing = (this.userData?.following||[]).includes(u.id);
+    const isPrivate = u.isPrivate === true && !isMine && !isFollowing;
+
+    const mySalesTxs = this.localDB.transactions.filter(t => t.sellerId===u.id && t.status==='Concludo');
+    const totalProfit = mySalesTxs.reduce((a,c) => a+c.amount, 0);
+    const followersCount = (u.followers||[]).length;
+    const followingCount = (u.following||[]).length;
+
+    let profileHtml = `
+      <div class="profile-cover"></div>
+      <div style="max-width:1400px;margin:0 auto;position:relative;z-index:2;">
+        <div class="profile-info-container">
+          <div id="profile-avatar" class="profile-avatar-large">${u.name.charAt(0)}</div>
+          <div class="profile-main-text">
+            <h1>${u.name}</h1>
+            <p>${u.bio||"Produtor na rede Breakthesystem."}</p>
+            <div style="display:flex;gap:0.8rem;margin-top:1rem;flex-wrap:wrap;">
+              ${!isMine ? `
+                <button onclick="app.toggleFollow('${u.id}')" class="btn ${isFollowing?'btn-danger':'btn-primary'}" style="padding:0.6rem 1.4rem;">
+                  <i class="fas ${isFollowing?'fa-user-minus':'fa-user-plus'}"></i> ${isFollowing?'Deixar de Seguir':'Seguir'}
+                </button>
+                <button onclick="app.startDirectChat('${u.id}')" class="btn btn-secondary" style="padding:0.6rem 1.4rem;">
+                  <i class="fas fa-comment"></i> Mensagem
+                </button>
+              ` : `<button onclick="app.switchView('view-settings')" class="btn btn-secondary" style="padding:0.6rem 1.4rem;"><i class="fas fa-edit"></i> Editar Perfil</button>`}
+            </div>
+          </div>
+    `;
+
+    // Se a conta for privada, esconde estatsticas e vitrine
+    if(isPrivate) {
+      profileHtml += `
+        </div>
+        <div class="private-profile-notice">
+          <i class="fas fa-lock"></i>
+          <h2 style="font-size:1.8rem;margin-bottom:0.5rem;">Conta Privada</h2>
+          <p>Voc precisa seguir ${u.name} para ver seus produtos e estatsticas financeiras.</p>
+        </div>
+      </div>`;
+      document.getElementById('view-profile').innerHTML = profileHtml;
+    } else {
+      profileHtml += `
+          <div class="profile-stats-bar">
+            <div class="stat-item" onclick="app.showFollowersModal('${u.id}','followers')"><span>${followersCount}</span><small>Seguidores</small></div>
+            <div class="stat-item" onclick="app.showFollowersModal('${u.id}','following')"><span>${followingCount}</span><small>Seguindo</small></div>
+            <div class="stat-item"><span>${u.sales||0}</span><small>Vendas</small></div>
+            <div class="stat-item"><span style="color:var(--success);">Db ${totalProfit.toFixed(2)}</span><small>Lucro Acum.</small></div>
+          </div>
+        </div>
+        <div style="margin-top:4rem;">
+          <h3 style="margin-bottom:2rem;border-bottom:var(--glass-border);padding-bottom:1rem;"><i class="fas fa-boxes" style="color:var(--primary);"></i> Vitrine de Produtos</h3>
+          <div id="profile-products-grid" class="grid-5"></div>
+        </div>
+      </div>`;
+      
+      document.getElementById('view-profile').innerHTML = profileHtml;
+      
+      // Render Products
+      const grid = document.getElementById('profile-products-grid');
+      const prods = this.localDB.products.filter(p => p.sellerId === u.id);
+      if(prods.length === 0) {
+        grid.innerHTML = `<div style="grid-column:1/-1;padding:3rem;text-align:center;color:var(--text-muted);"><i class="fas fa-box-open" style="font-size:2rem;margin-bottom:1rem;display:block;"></i>Sem produtos publicados.</div>`;
+      } else {
+        prods.forEach(p => {
+          grid.insertAdjacentHTML('beforeend', `
+            <div class="card product-card">
+              <div class="product-img" style="background-image:url('${p.image}');"><span class="product-badge">${p.category}</span></div>
+              <div class="product-content">
+                <h3 class="product-title">${p.title}</h3>
+                <div class="product-footer"><div class="product-price"><span>Db</span> ${p.price.toFixed(2)}</div>
+                <button class="btn btn-secondary" onclick="app.switchView('view-marketplace')">Ver na Loja</button></div>
+              </div>
+            </div>`);
+        });
+      }
+    }
+
+    if(u.avatar) {
+      const av = document.getElementById('profile-avatar');
+      av.style.backgroundImage = `url('${u.avatar}')`;
+      av.innerText = '';
+    }
+  },
+
+  async startDirectChat(targetUserId) {
+    let chat = this.localDB.chats.find(c => c.participants.includes(this.currentUser.uid) && c.participants.includes(targetUserId));
+    if(!chat) {
+      const nc = await db.collection('chats').add({ participants: [this.currentUser.uid, targetUserId], messages: [], lastMessage: null });
+      this.activeChatId = nc.id;
+    } else {
+      this.activeChatId = chat.id;
+    }
+    this.switchView('view-chat');
+    setTimeout(() => this.openChat(this.activeChatId), 500);
+  },
+
+  exportCSV() {
+    let csv = "DATA,PRODUTO,TIPO,VALOR,STATUS\n";
+    this.localDB.transactions.forEach(t => {
+      csv += `${new Date(t.date).toLocaleDateString()},"${t.pTitle}",${t.sellerId===this.currentUser.uid?"Receita":"Despesa"},${t.amount},${t.status}\n`;
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8;'}));
+    link.download = "RelatorioFinanceiro.csv";
+    document.body.appendChild(link); link.click(); document.body.removeChild(link);
+  },
+
+  /* ====== EVENTS ====== */
+  setupEvents() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+    const toggleSidebar = () => { sidebar.classList.toggle('open'); overlay.classList.toggle('active'); };
+    document.getElementById('hamburger-btn').addEventListener('click', toggleSidebar);
+    document.getElementById('sidebar-close-btn').addEventListener('click', toggleSidebar);
+    overlay.addEventListener('click', toggleSidebar);
+
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.addEventListener('click', e => {
+        if(window.innerWidth <= 900 && sidebar.classList.contains('open')) toggleSidebar();
+        if(e.currentTarget.id === 'nav-meu-perfil') this.viewingProfileId = null;
+        this.switchView(e.currentTarget.getAttribute('data-target'));
+      });
+    });
+
+    document.getElementById('auth-form').addEventListener('submit', e => {
+      e.preventDefault();
+      this.processAuth(
+        document.getElementById('auth-name').value.trim(),
+        document.getElementById('auth-email').value.trim(),
+        document.getElementById('auth-pass').value
+      );
+    });
+    document.getElementById('toggle-auth-mode').addEventListener('click', e => { e.preventDefault(); this.toggleAuthMode(); });
+
+    document.getElementById('prod-image-file').addEventListener('change', e => {
+      const files = Array.from(e.target.files);
+      files.forEach(f => {
+        if(this.tempProductImages.length >= 6) return;
+        ImageTools.resizeBase64(f, 800, 800, b64 => {
+          this.tempProductImages.push(b64);
+          this.renderProductImagePreviews();
+        });
+      });
+      e.target.value = '';
+    });
+
+    document.getElementById('prod-affiliate-enabled').addEventListener('change', e => {
+      document.getElementById('affiliate-config-area').style.opacity = e.target.checked ? '1' : '0.4';
+      document.getElementById('affiliate-config-area').style.pointerEvents = e.target.checked ? '' : 'none';
+    });
+
+    document.getElementById('form-create-product').addEventListener('submit', e => {
+      e.preventDefault();
+      this.createProduct(
+        document.getElementById('prod-title').value,
+        document.getElementById('prod-desc').value,
+        document.getElementById('prod-price').value,
+        document.getElementById('prod-category').value
+      );
+    });
+
+    document.getElementById('search-marketplace').addEventListener('input', e => this.renderMarketplace(document.getElementById('filter-marketplace').value, e.target.value));
+    document.getElementById('filter-marketplace').addEventListener('change', e => this.renderMarketplace(e.target.value, document.getElementById('search-marketplace').value));
+
+    document.getElementById('set-avatar-file').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if(f) ImageTools.resizeBase64(f, 300, 300, b64 => {
+        this.tempAvatarBase64 = b64;
+        document.getElementById('settings-avatar-preview-box').style.backgroundImage = `url('${b64}')`;
+        document.getElementById('settings-avatar-preview-box').innerHTML = '';
+      });
+    });
+
+    document.getElementById('form-settings').addEventListener('submit', async e => {
+      e.preventDefault();
+      try {
+        const data = { 
+          name: document.getElementById('set-name').value, 
+          bio: document.getElementById('set-bio').value,
+          isPrivate: document.getElementById('set-private').checked
+        };
+        if(this.tempAvatarBase64) data.avatar = this.tempAvatarBase64;
+        await db.collection('users').doc(this.currentUser.uid).update(data);
+        this.tempAvatarBase64 = null;
+        UI.toast("Perfil atualizado!", "success");
+      } catch(err) { UI.toast("Erro ao atualizar", "error"); }
+    });
+
+    // Chat send
+    document.getElementById('btn-send-msg').onclick = () => this.sendChatText();
+    document.getElementById('chat-input-text').addEventListener('keydown', e => {
+      if(e.key==='Enter' && !e.shiftKey) { e.preventDefault(); this.sendChatText(); }
+    });
+    document.getElementById('chat-input-text').addEventListener('input', () => this.toggleSendMic());
+
+    document.getElementById('btn-mic').onclick = () => this.toggleRecording();
+    document.getElementById('btn-attach-img').onclick = () => document.getElementById('chat-img-upload').click();
+    document.getElementById('chat-img-upload').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if(f) ImageTools.resizeBase64(f, 900, 900, b64 => this.sendChatMessage('image', b64));
+      e.target.value = '';
+    });
+
+    // Novos Botões Escrow/Envio
+    document.getElementById('btn-send-product').onclick = () => this.notifyShipped();
+    document.getElementById('btn-confirm-receipt').onclick = () => this.confirmReceipt();
+
+    document.getElementById('emoji-toggle-btn').addEventListener('click', e => {
+      e.stopPropagation();
+      const ep = document.getElementById('quick-emoji-picker');
+      ep.style.display = ep.style.display === 'flex' ? 'none' : 'flex';
+    });
+  },
+
+
+  callStream:null,callPeer:null,callTimer:null,callSec:0,callId:null,
+  async startCall(type){
+    const chat=this.localDB.chats.find(c=>c.id===this.activeChatId);
+    const other=chat.participants.find(p=>p!==this.currentUser.uid);
+    const user=this.localDB.users.find(u=>u.id===other)||{name:'Usuario'};
+    document.getElementById('call-name').innerText=user.name;
+    document.getElementById('call-status').innerText=type==='video'?'Video':'Voz';
+    document.getElementById('call-avatar').innerText=user.name.charAt(0);
+    document.getElementById('call-modal').style.display='flex';
+    try{
+      const cons=type==='video'?{video:true,audio:true}:{audio:true};
+      this.callStream=await navigator.mediaDevices.getUserMedia(cons);
+      if(type==='video'){document.getElementById('call-local').srcObject=this.callStream;document.getElementById('call-local').style.display='block';}
+      this.callPeer=new RTCPeerConnection({iceServers:[{urls:'stun:stun.l.google.com:19302'}]});
+      this.callStream.getTracks().forEach(t=>this.callPeer.addTrack(t,this.callStream));
+      this.callPeer.ontrack=e=>{document.getElementById('call-remote').srcObject=e.streams[0];document.getElementById('call-remote').style.display='block';document.getElementById('call-avatar-box').style.display='none';document.getElementById('call-timer').style.display='block';this.callSec=0;this.callTimer=setInterval(()=>{this.callSec++;const m=Math.floor(this.callSec/60).toString().padStart(2,'0');const s=(this.callSec%60).toString().padStart(2,'0');document.getElementById('call-timer').innerText=m+':'+s;},1000);};
+      const id='call_'+Date.now();this.callId=id;
+      this.callPeer.onicecandidate=async e=>{if(e.candidate)await db.collection('calls').doc(id).collection('a').add(e.candidate.toJSON());};
+      const offer=await this.callPeer.createOffer();await this.callPeer.setLocalDescription(offer);
+      await db.collection('calls').doc(id).set({type,caller:this.currentUser.uid,callee:other,offer:{type:offer.type,sdp:offer.sdp},status:'ringing',created:Date.now()});
+      db.collection('calls').doc(id).onSnapshot(async s=>{const d=s.data();if(d?.answer&&!this.callPeer.currentRemoteDescription){await this.callPeer.setRemoteDescription(new RTCSessionDescription(d.answer));}if(d?.status==='ended')this.endCall();});
+      db.collection('calls').doc(id).collection('b').onSnapshot(s=>{s.docChanges().forEach(c=>{if(c.type==='added')this.callPeer.addIceCandidate(new RTCIceCandidate(c.doc.data()));});});
+    }catch(e){UI.toast('Erro: '+e.message,'error');this.endCall();}
+  },
+  toggleMute(){if(!this.callStream)return;const t=this.callStream.getAudioTracks()[0];if(t){t.enabled=!t.enabled;document.getElementById('call-mute').innerHTML=t.enabled?'<i class="fas fa-microphone"></i>':'<i class="fas fa-microphone-slash"></i>';}},
+  toggleCam(){if(!this.callStream)return;const t=this.callStream.getVideoTracks()[0];if(t){t.enabled=!t.enabled;document.getElementById('call-cam').innerHTML=t.enabled?'<i class="fas fa-video"></i>':'<i class="fas fa-video-slash"></i>';}},
+  async endCall(){if(this.callTimer)clearInterval(this.callTimer);if(this.callStream)this.callStream.getTracks().forEach(t=>t.stop());if(this.callId){try{await db.collection('calls').doc(this.callId).update({status:'ended'});}catch(e){}}this.callStream=null;this.callPeer=null;document.getElementById('call-modal').style.display='none';document.getElementById('call-remote').style.display='none';document.getElementById('call-local').style.display='none';document.getElementById('call-avatar-box').style.display='block';document.getElementById('call-timer').style.display='none';},
+  /* ====== BACKGROUND ====== */
+  initBackground() {
+    const cvs = document.getElementById('bg-canvas');
+    const ctx = cvs.getContext('2d');
+    let W, H;
+    function resize() { W = cvs.width = window.innerWidth; H = cvs.height = window.innerHeight; }
+    window.addEventListener('resize', resize);
+    resize();
+
+    const nodes = [];
+    for(let i=0; i<70; i++) {
+      nodes.push({ x:Math.random()*W, y:Math.random()*H, vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4, r:Math.random()*1.5+0.5,
+        update(){this.x+=this.vx;this.y+=this.vy;if(this.x>W||this.x<0)this.vx=-this.vx;if(this.y>H||this.y<0)this.vy=-this.vy;}});
+    }
+
+    function buildBolt(x1,y1,x2,y2,d,depth) {
+      if(depth===0) return [[x1,y1],[x2,y2]];
+      const mx=(x1+x2)/2+(Math.random()-0.5)*d, my=(y1+y2)/2+(Math.random()-0.5)*d;
+      return [...buildBolt(x1,y1,mx,my,d*0.6,depth-1), ...buildBolt(mx,my,x2,y2,d*0.6,depth-1).slice(1)];
+    }
+
+    const activeBolts = [];
+    function spawnLightning() {
+      const sx=Math.random()*W, ex=sx+(Math.random()-0.5)*300, ey=H*0.3+Math.random()*H*0.5;
+      const pts=buildBolt(sx,0,ex,ey,120,8);
+      const branches=[];
+      for(let i=0;i<3;i++){const bi=Math.floor(Math.random()*(pts.length-2))+1;const[bx,by]=pts[bi];const bex=bx+(Math.random()-0.5)*200,bey=by+Math.random()*150;if(bey<H)branches.push({pts:buildBolt(bx,by,bex,bey,60,6),alpha:0.5+Math.random()*0.3});}
+      activeBolts.push({pts,branches,life:1.0,decay:0.06+Math.random()*0.04,flashAlpha:0.12+Math.random()*0.1});
+    }
+
+    function drawBolt(pts,alpha,thickness){
+      if(pts.length<2)return;
+      ctx.save();
+      ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+      ctx.strokeStyle=`rgba(100,180,255,${alpha*0.15})`;ctx.lineWidth=thickness*8;ctx.lineCap='round';ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+      ctx.strokeStyle=`rgba(150,210,255,${alpha*0.35})`;ctx.lineWidth=thickness*3;ctx.stroke();
+      ctx.beginPath();ctx.moveTo(pts[0][0],pts[0][1]);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i][0],pts[i][1]);
+      ctx.strokeStyle=`rgba(220,240,255,${alpha})`;ctx.lineWidth=thickness;ctx.shadowBlur=15;ctx.shadowColor='rgba(100,200,255,0.8)';ctx.stroke();
+      ctx.restore();
+    }
+
+    let time=0, nextLightning=80+Math.random()*120;
+    function animate() {
+      requestAnimationFrame(animate);
+      const sg=ctx.createLinearGradient(0,0,0,H);sg.addColorStop(0,'#010a18');sg.addColorStop(1,'#030d1f');ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
+      time+=0.012;
+      ctx.save();ctx.beginPath();ctx.shadowBlur=18;ctx.shadowColor='#0ea5e9';ctx.strokeStyle='rgba(14,165,233,0.7)';ctx.lineWidth=1.8;
+      for(let x=0;x<=W;x+=8){const y=(H/2)+Math.sin(x*0.004+time)*60+Math.sin(x*0.009-time*1.3)*30+Math.cos(x*0.006+time*0.7)*20;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();
+      ctx.beginPath();ctx.strokeStyle='rgba(14,165,233,0.2)';ctx.lineWidth=1;ctx.shadowBlur=5;
+      for(let x=0;x<=W;x+=8){const y=(H/2)+20+Math.sin(x*0.005-time*0.8)*45+Math.cos(x*0.011+time)*20;x===0?ctx.moveTo(x,y):ctx.lineTo(x,y);}ctx.stroke();ctx.restore();
+      ctx.save();
+      for(let i=0;i<nodes.length;i++){nodes[i].update();ctx.beginPath();ctx.arc(nodes[i].x,nodes[i].y,nodes[i].r,0,Math.PI*2);ctx.fillStyle='rgba(14,165,233,0.4)';ctx.fill();for(let j=i+1;j<nodes.length;j++){const dx=nodes[i].x-nodes[j].x,dy=nodes[i].y-nodes[j].y,dist=Math.sqrt(dx*dx+dy*dy);if(dist<130){ctx.beginPath();ctx.moveTo(nodes[i].x,nodes[i].y);ctx.lineTo(nodes[j].x,nodes[j].y);ctx.strokeStyle=`rgba(14,165,233,${0.08*(1-dist/130)})`;ctx.lineWidth=0.6;ctx.stroke();}}}ctx.restore();
+      nextLightning--;
+      if(nextLightning<=0){spawnLightning();nextLightning=100+Math.random()*200;}
+      for(let i=activeBolts.length-1;i>=0;i--){const bolt=activeBolts[i];if(bolt.life>0.85){ctx.fillStyle=`rgba(180,220,255,${bolt.flashAlpha*(bolt.life-0.85)/0.15})`;ctx.fillRect(0,0,W,H);}const fa=bolt.life*(0.7+Math.random()*0.3);drawBolt(bolt.pts,fa,1.5);bolt.branches.forEach(br=>drawBolt(br.pts,fa*br.alpha,0.8));bolt.life-=bolt.decay;if(bolt.life<=0)activeBolts.splice(i,1);}
+    }
+    animate();
+  }
+};
+
+window.onload = () => app.init();
+</script>
+
+<!-- PAYMENT MODAL -->
+<div id="payment-overlay" class="payment-overlay">
+  <div class="payment-modal">
+    <div class="payment-header">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div>
+          <h3 style="font-size:1.25rem;"><i class="fas fa-lock" style="color:var(--success);margin-right:8px;"></i>Pagamento Seguro</h3>
+          <p id="pay-product-name" style="font-size:.85rem;margin-top:4px;"></p>
+        </div>
+        <button onclick="app.closePaymentModal()" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);color:var(--text-muted);border-radius:50%;width:36px;height:36px;cursor:pointer;font-size:1rem;display:flex;align-items:center;justify-content:center;"><i class="fas fa-times"></i></button>
+      </div>
+      <div style="margin-top:1rem;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);border-radius:10px;padding:.8rem 1.2rem;display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:var(--text-muted);font-size:.9rem;">Total a pagar</span>
+        <strong id="pay-total" style="font-size:1.4rem;color:var(--success);">Db 0.00</strong>
+      </div>
+    </div>
+    <div class="payment-body">
+      <p style="font-size:.85rem;color:var(--text-muted);margin-bottom:1rem;text-transform:uppercase;letter-spacing:.8px;font-weight:600;">Escolha o método de pagamento</p>
+
+      <div class="payment-method" onclick="app.selectPayment('card')" id="pm-card">
+        <div class="pm-icon" style="background:rgba(59,130,246,0.15);color:var(--primary);"><i class="fas fa-credit-card"></i></div>
+        <div class="pm-info"><strong>Cartão de Crédito / Débito</strong><small>Visa, Mastercard, AmEx</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <div class="payment-method" onclick="app.selectPayment('paypal')" id="pm-paypal">
+        <div class="pm-icon" style="background:rgba(0,48,135,0.25);color:#00A8E0;"><i class="fab fa-paypal"></i></div>
+        <div class="pm-info"><strong>PayPal</strong><small>Pagamento rápido e seguro</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <div class="payment-method" onclick="app.selectPayment('transfer')" id="pm-transfer">
+        <div class="pm-icon" style="background:rgba(16,185,129,0.15);color:var(--success);"><i class="fas fa-university"></i></div>
+        <div class="pm-info"><strong>Transferência / IBAN</strong><small>Banco a banco, 1-3 dias úteis</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <div class="payment-method" onclick="app.selectPayment('mpesa')" id="pm-mpesa">
+        <div class="pm-icon" style="background:rgba(220,38,38,0.15);color:#ef4444;"><i class="fas fa-mobile-alt"></i></div>
+        <div class="pm-info"><strong>M-Pesa / Mobile Money</strong><small>Pagamento via telemóvel</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <div class="payment-method" onclick="app.selectPayment('crypto')" id="pm-crypto">
+        <div class="pm-icon" style="background:rgba(251,191,36,0.15);color:#FBBF24;"><i class="fab fa-bitcoin"></i></div>
+        <div class="pm-info"><strong>Criptomoeda</strong><small>Bitcoin, USDT, ETH</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <div class="payment-method" onclick="app.selectPayment('applepay')" id="pm-applepay">
+        <div class="pm-icon" style="background:rgba(255,255,255,0.08);color:#fff;"><i class="fab fa-apple"></i></div>
+        <div class="pm-info"><strong>Apple Pay / Google Pay</strong><small>Pagamento instantâneo</small></div>
+        <i class="fas fa-check-circle pm-check"></i>
+      </div>
+
+      <!-- Dynamic form area -->
+      <div id="pm-form-card" class="pm-form-area" style="display:none;">
+        <div class="form-group" style="margin-bottom:.8rem;"><label class="form-label" style="font-size:.8rem;">Número do Cartão</label><input class="form-control" id="pm-card-num" placeholder="0000 0000 0000 0000" maxlength="19"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.8rem;">
+          <div class="form-group" style="margin:0;"><label class="form-label" style="font-size:.8rem;">Validade</label><input class="form-control" id="pm-card-exp" placeholder="MM/AA" maxlength="5"></div>
+          <div class="form-group" style="margin:0;"><label class="form-label" style="font-size:.8rem;">CVV</label><input class="form-control" id="pm-card-cvv" placeholder="•••" maxlength="4" type="password"></div>
+        </div>
+        <div class="form-group" style="margin-top:.8rem;margin-bottom:0;"><label class="form-label" style="font-size:.8rem;">Nome no Cartão</label><input class="form-control" id="pm-card-name" placeholder="Nome completo"></div>
+      </div>
+      <div id="pm-form-transfer" class="pm-form-area" style="display:none;">
+        <p style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);">Dados para transferência:</p>
+        <div style="background:rgba(0,0,0,0.3);border-radius:8px;padding:.8rem 1rem;font-size:.85rem;line-height:2;">
+          <strong style="color:#fff;">IBAN:</strong> <span style="color:var(--secondary);">ST68000200010192194113106</span><br>
+          <strong style="color:#fff;">BIC/SWIFT:</strong> <span style="color:var(--secondary);">BICSTP21</span><br>
+          <strong style="color:#fff;">Beneficiário:</strong> <span style="color:var(--secondary);">Breakthesystem Lda.</span>
+        </div>
+        <p style="font-size:.78rem;color:var(--warning);margin-top:.6rem;"><i class="fas fa-info-circle"></i> Use o ID do pedido como referência da transferência.</p>
+      </div>
+      <div id="pm-form-mpesa" class="pm-form-area" style="display:none;">
+        <div class="form-group" style="margin-bottom:0;"><label class="form-label" style="font-size:.8rem;">Número M-Pesa</label><input class="form-control" id="pm-mpesa-num" placeholder="+239 9XX XXX XXX"></div>
+      </div>
+      <div id="pm-form-crypto" class="pm-form-area" style="display:none;">
+        <p style="font-size:.85rem;margin-bottom:.8rem;color:var(--text-muted);">Selecione a moeda:</p>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:.8rem;">
+          <button onclick="app.selectCrypto(this,'BTC')" class="btn btn-secondary" style="padding:.4rem .8rem;font-size:.8rem;">₿ Bitcoin</button>
+          <button onclick="app.selectCrypto(this,'USDT')" class="btn btn-secondary" style="padding:.4rem .8rem;font-size:.8rem;">₮ USDT</button>
+          <button onclick="app.selectCrypto(this,'ETH')" class="btn btn-secondary" style="padding:.4rem .8rem;font-size:.8rem;">Ξ Ethereum</button>
+        </div>
+        <div id="crypto-addr" style="background:rgba(0,0,0,0.3);border-radius:8px;padding:.8rem;font-size:.75rem;color:var(--secondary);word-break:break-all;display:none;"></div>
+      </div>
+
+      <button id="pay-confirm-btn" class="btn btn-primary" style="width:100%;margin-top:1.5rem;padding:1rem;font-size:1rem;" onclick="app.confirmPayment()"><i class="fas fa-shield-alt"></i> Confirmar Pagamento</button>
+      <p style="text-align:center;font-size:.75rem;color:var(--text-muted);margin-top:.8rem;"><i class="fas fa-lock"></i> Transação protegida com escrow. O valor só é libertado após confirmação.</p>
+    </div>
+  </div>
+</div>
+
+<!-- PRODUCT DETAIL MODAL -->
+<div id="prod-detail-overlay" class="prod-detail-overlay">
+  <div class="prod-detail-modal">
+    <button class="prod-detail-close" onclick="app.closeProductDetail()"><i class="fas fa-times"></i></button>
+
+    <!-- Carousel -->
+    <div class="img-carousel" id="pd-carousel">
+      <div class="carousel-track" id="pd-carousel-track"></div>
+      <button class="carousel-btn prev" id="pd-prev" onclick="app.carouselNav(-1)"><i class="fas fa-chevron-left"></i></button>
+      <button class="carousel-btn next" id="pd-next" onclick="app.carouselNav(1)"><i class="fas fa-chevron-right"></i></button>
+      <div class="carousel-dots" id="pd-dots"></div>
+    </div>
+
+    <div style="padding:1.8rem 2rem;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;flex-wrap:wrap;">
+        <div style="flex:1;">
+          <span id="pd-badge" class="badge" style="background:rgba(59,130,246,0.2);color:var(--secondary);margin-bottom:.6rem;display:inline-block;"></span>
+          <h2 id="pd-title" style="font-size:1.6rem;margin-bottom:.5rem;"></h2>
+          <div style="display:flex;align-items:center;gap:.8rem;margin-bottom:.5rem;">
+            <div id="pd-stars" class="star-display"></div>
+            <span id="pd-rating-text" style="font-size:.85rem;color:var(--text-muted);"></span>
+          </div>
+          <div class="product-seller" id="pd-seller" style="margin:0;"></div>
+        </div>
+        <div style="text-align:right;">
+          <div id="pd-price" class="product-price" style="font-size:2rem;"></div>
+          <div id="pd-action-btns" style="margin-top:.8rem;display:flex;flex-direction:column;gap:.5rem;min-width:180px;"></div>
+        </div>
+      </div>
+      <div style="margin-top:1.2rem;padding:1.2rem;background:rgba(0,0,0,0.25);border-radius:12px;">
+        <h4 style="margin-bottom:.6rem;font-size:.85rem;text-transform:uppercase;letter-spacing:.8px;color:var(--text-muted);">Descrição</h4>
+        <p id="pd-desc" style="color:var(--text-dark);line-height:1.7;white-space:pre-wrap;font-size:.95rem;"></p>
+      </div>
+    </div>
+
+    <!-- Comments & Rating -->
+    <div class="comments-section">
+      <h3 style="margin-bottom:1.2rem;display:flex;align-items:center;gap:.6rem;"><i class="fas fa-comments" style="color:var(--primary);"></i> Avaliações & Comentários <span id="pd-comment-count" class="badge" style="background:rgba(59,130,246,0.15);color:var(--primary);font-size:.75rem;">0</span></h3>
+
+      <!-- Add review -->
+      <div class="comment-form" id="pd-review-form">
+        <p style="font-size:.85rem;font-weight:600;margin-bottom:.6rem;">A sua avaliação</p>
+        <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.8rem;">
+          <div class="star-rating" id="review-stars">
+            <span class="star" data-v="1" onclick="app.setReviewRating(1)">★</span>
+            <span class="star" data-v="2" onclick="app.setReviewRating(2)">★</span>
+            <span class="star" data-v="3" onclick="app.setReviewRating(3)">★</span>
+            <span class="star" data-v="4" onclick="app.setReviewRating(4)">★</span>
+            <span class="star" data-v="5" onclick="app.setReviewRating(5)">★</span>
+          </div>
+          <span id="review-rating-label" style="font-size:.8rem;color:var(--text-muted);">Sem classificação</span>
+        </div>
+        <textarea id="review-text" class="comment-input" rows="3" placeholder="Partilhe a sua experiência com este produto..."></textarea>
+        <button onclick="app.submitReview()" class="btn btn-primary" style="margin-top:.8rem;width:100%;padding:.8rem;"><i class="fas fa-paper-plane"></i> Publicar Avaliação</button>
+      </div>
+
+      <div id="pd-comments-list" style="margin-top:1rem;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CALL MODAL -->
+<div id="call-modal" style="position:fixed;inset:0;background:#000;z-index:9999;display:none;flex-direction:column;">
+  <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;">
+    <video id="call-remote" autoplay playsinline style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+    <video id="call-local" autoplay playsinline muted style="position:absolute;bottom:100px;right:20px;width:110px;height:150px;border-radius:12px;background:#111;object-fit:cover;border:2px solid rgba(255,255,255,0.2);display:none;z-index:2;"></video>
+    <div id="call-avatar-box" style="text-align:center;">
+      <div id="call-avatar" style="width:140px;height:140px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:3rem;margin:0 auto 1.5rem;"></div>
+      <h2 id="call-name" style="font-size:1.5rem;margin-bottom:0.5rem;">Chamando</h2>
+      <p id="call-status" style="color:var(--text-muted);">Chamada de voz</p>
+      <p id="call-timer" style="font-size:1.1rem;margin-top:1rem;color:var(--success);display:none;">00:00</p>
+    </div>
+  </div>
+  <div style="padding:30px;display:flex;justify-content:center;gap:20px;background:linear-gradient(to top, rgba(0,0,0,0.8), transparent);">
+    <button id="call-mute" onclick="app.toggleMute()" style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.2rem;cursor:pointer;"><i class="fas fa-microphone"></i></button>
+    <button onclick="app.endCall()" style="width:68px;height:68px;border-radius:50%;background:var(--danger);border:none;color:white;font-size:1.4rem;cursor:pointer;box-shadow:0 4px 20px rgba(239,68,68,0.5);"><i class="fas fa-phone-slash"></i></button>
+    <button id="call-cam" onclick="app.toggleCam()" style="width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,0.15);border:none;color:white;font-size:1.2rem;cursor:pointer;"><i class="fas fa-video"></i></button>
+  </div>
+</div>
+
+</body>
+</html>
