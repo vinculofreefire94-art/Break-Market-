@@ -6,7 +6,7 @@ import random
 from datetime import datetime
 
 import requests
-from openai import AsyncOpenAI  # ← AsyncOpenAI para evitar conflito com asyncio
+from groq import AsyncGroq
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -21,7 +21,7 @@ from telegram.ext import (
 #  CONFIGURAÇÕES — variáveis de ambiente
 # ════════════════════════════════════════════
 BOT_TOKEN  = os.environ.get("BOT_TOKEN", "")
-OPENAI_KEY = os.environ.get("OPENAI_API_KEY", "")
+GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
 VIDEO_ID   = os.environ.get("VIDEO_ID", "")
 CANAL_LINK = os.environ.get("CANAL_LINK", "https://t.me/clesstrade")
 ADMIN_ID   = int(os.environ.get("ADMIN_ID", "0"))
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 # ════════════════════════════════════════════
 #  OPENAI — cliente assíncrono
 # ════════════════════════════════════════════
-client = AsyncOpenAI(api_key=OPENAI_KEY)
+client = AsyncGroq(api_key=GROQ_KEY)
 
 # ════════════════════════════════════════════
 #  BANCO DE DADOS LOCAL (users.json)
@@ -425,7 +425,7 @@ async def responder(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     try:
         resposta = await client.chat.completions.create(
-            model="gpt-4o-mini",
+            model="llama3-70b-8192",
             messages=[{"role": "system", "content": SYSTEM_PROMPT}] + historico[user.id],
             temperature=0.85,
             max_tokens=600,
